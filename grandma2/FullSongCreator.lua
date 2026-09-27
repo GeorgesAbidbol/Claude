@@ -55,11 +55,12 @@ local function askNumber(title, integer)
     local r = ask(title)
     if r == nil then return nil end
     local n = tonumber(r)
-    if n and (not integer or n == math.floor(n)) then
+    if n and n > 0 and (not integer or n == math.floor(n)) then
       if integer then return math.floor(n) end
       return n
     end
-    gma.gui.msgbox(TITLE, '"' .. r .. '" n\'est pas un nombre valide.')
+    -- 0 est refuse : "Macro 1.0", "Page 0"... n'existent pas.
+    gma.gui.msgbox(TITLE, '"' .. r .. '" n\'est pas valide : nombre superieur a 0 attendu.')
   end
 end
 
@@ -222,19 +223,9 @@ local function run()
 
   -- 6. Verification : relecture de chaque ligne stockee
   gma.sleep(0.3)  -- gma.cmd est asynchrone
+  -- Les commandes des cues ne sont pas relues : la console ne les expose pas
+  -- sur l'objet cue (relecture toujours vide alors qu'elles sont inscrites).
   local errors = {}
-  for _, c in ipairs(cueCmds) do
-    local got = readCmd(S .. ' Cue ' .. c[1])
-    if got == nil then
-      log('Cue ' .. c[1] .. ' : relecture impossible, verifier dans la sequence')
-    else
-      local ok = clean(got) == clean(c[2])
-      log(string.format('Cue %s %s : %s', c[1], ok and 'OK' or 'ERREUR', got))
-      if not ok then
-        errors[#errors + 1] = 'Cue ' .. c[1] .. ' attendue : ' .. c[2]
-      end
-    end
-  end
   for i, text in ipairs(lines) do
     local got = readMacroLine(macroNum, i)
     local ok = got ~= nil and clean(got) == clean(text)
