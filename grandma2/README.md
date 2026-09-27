@@ -28,16 +28,16 @@ affiché avant toute modification.
 
 **Page** : créée si besoin, puis nommée avec le titre.
 
-**Séquence principale** (executor 16 de la page) :
+**Séquence principale** (executor 16 de la page, largeur 2 faders) :
 
-| Cue | Nom | Trig |
-|---|---|---|
-| 0.5 | Mise | — |
-| 0.6 | Select Timecode | Follow |
-| 0.7 | Go Timecode | Follow |
-| 1 à 20 | cues du titre | — |
-| 21 | Black Out | — |
-| 22 | Off Timecode | Follow |
+| Cue | Nom | Trig | CMD |
+|---|---|---|---|
+| 0.5 | Mise | — | — |
+| 0.6 | Select Timecode | Follow | `Select Timecode '<nom du titre>'` |
+| 0.7 | Go Timecode | Follow | `Go Timecode '<nom du titre>'` |
+| 1 à 20 | cues du titre | — | — |
+| 21 | Black Out | — | — |
+| 22 | Off Timecode | Follow | `Off Timecode '<nom du titre>'` |
 
 **Extras** : executors 121 à 130. Une séquence extra qui n'existe pas est créée
 vide ; une séquence existante n'est pas modifiée.
@@ -63,7 +63,7 @@ de titre change bien de page avec `Page '<nom>'`.
 
 ## Réglages
 
-En tête de `FullSongCreator.lua` : executors du main et des extras, SpecialMaster
+En tête de `FullSongCreator.lua` : executors du main (et sa largeur) et des extras, SpecialMaster
 du BPM, pages communes exclues du `Off Page Thru` (`EXCLUSIONS`).
 
 ## Différences avec la version grandMA3

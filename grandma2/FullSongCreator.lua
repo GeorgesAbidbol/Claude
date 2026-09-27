@@ -12,6 +12,7 @@
 
 -- ============================== REGLAGES ==============================
 local EXEC_MAIN        = 16             -- executor de la sequence principale
+local EXEC_MAIN_WIDTH  = 2              -- largeur de cet executor (1 a 5 faders)
 local EXEC_EXTRA_FIRST = 121            -- executors des sequences extras
 local EXEC_EXTRA_LAST  = 130
 local SPEEDMASTER      = '3.1'          -- SpecialMaster qui recoit le BPM
@@ -166,11 +167,17 @@ local function run()
   cmd('Label ' .. S .. ' Cue 0.7 "Go Timecode"')
   cmd('Label ' .. S .. ' Cue 21 "Black Out"')
   cmd('Label ' .. S .. ' Cue 22 "Off Timecode"')
+  -- Commandes des cues timecode : le timecode porte le nom du titre.
+  -- Apostrophes car MA2 n'accepte pas de " dans /cmd="...".
+  cmd(string.format("Assign %s Cue 0.6 /cmd=\"Select Timecode '%s'\"", S, name))
+  cmd(string.format("Assign %s Cue 0.7 /cmd=\"Go Timecode '%s'\"", S, name))
+  cmd(string.format("Assign %s Cue 22 /cmd=\"Off Timecode '%s'\"", S, name))
   cmd('Assign ' .. S .. ' Cue 0.6 /trig=follow')
   cmd('Assign ' .. S .. ' Cue 0.7 /trig=follow')
   cmd('Assign ' .. S .. ' Cue 22 /trig=follow')
   cmd(string.format('Label %s "%s"', S, name))
   cmd(string.format('Assign %s At Executor %d.%d', S, page, EXEC_MAIN))
+  cmd(string.format('Assign Executor %d.%d /width=%d', page, EXEC_MAIN, EXEC_MAIN_WIDTH))
 
   -- 4. Extras (crees vides s'ils n'existent pas, jamais modifies sinon)
   for i = 0, nbExtras - 1 do
