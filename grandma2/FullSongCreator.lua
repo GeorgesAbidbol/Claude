@@ -111,21 +111,27 @@ local function run()
   local page = askNumber('Numero de page ?', true);                     if not page then return end
   local bpm = askNumber('BPM du titre ?', false);                        if not bpm then return end
   local seqMain = askNumber('Sequence principale ?', true);              if not seqMain then return end
-  local exStart = askNumber('Premiere sequence extra ?', true);          if not exStart then return end
-  local exEnd = askNumber('Derniere sequence extra ?', true);            if not exEnd then return end
-  local macroNum = askNumber('Numero de la macro du titre ?', true);     if not macroNum then return end
-
-  local nbExtras = exEnd - exStart + 1
+  -- Extras : en cas d'erreur, on explique et on redemande (au lieu d'arreter).
   local maxExtras = EXEC_EXTRA_LAST - EXEC_EXTRA_FIRST + 1
-  if nbExtras < 1 or nbExtras > maxExtras then
-    gma.gui.msgbox(TITLE, 'Extras : de 1 a ' .. maxExtras .. ' sequences (executors '
-      .. EXEC_EXTRA_FIRST .. ' a ' .. EXEC_EXTRA_LAST .. ').')
-    return
+  local exStart, exEnd, nbExtras
+  while true do
+    exStart = askNumber('Premiere sequence extra ?', true);              if not exStart then return end
+    exEnd = askNumber('Derniere sequence extra ?', true);                if not exEnd then return end
+    nbExtras = exEnd - exStart + 1
+    local problem
+    if nbExtras < 1 then
+      problem = 'la derniere sequence (' .. exEnd .. ') est avant la premiere (' .. exStart .. ').'
+    elseif nbExtras > maxExtras then
+      problem = exStart .. ' a ' .. exEnd .. ' = ' .. nbExtras .. ' sequences, maximum '
+        .. maxExtras .. ' (executors ' .. EXEC_EXTRA_FIRST .. ' a ' .. EXEC_EXTRA_LAST .. ').'
+    elseif seqMain >= exStart and seqMain <= exEnd then
+      problem = 'la sequence principale (' .. seqMain .. ') est dans la plage ' .. exStart .. ' a ' .. exEnd .. '.'
+    end
+    if not problem then break end
+    log('Extras refuses : ' .. problem)
+    gma.gui.msgbox(TITLE, 'Extras : ' .. problem .. '|Saisis a nouveau les sequences extras.')
   end
-  if seqMain >= exStart and seqMain <= exEnd then
-    gma.gui.msgbox(TITLE, 'La sequence principale ne peut pas faire partie des extras.')
-    return
-  end
+  local macroNum = askNumber('Numero de la macro du titre ?', true);     if not macroNum then return end
 
   local recap = string.format(
     'Titre : %s|Page : %d|BPM : %s|Sequence principale : %d (exec %d)|Extras : %d a %d (exec %d a %d)|Macro : %d',
