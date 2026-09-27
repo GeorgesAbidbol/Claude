@@ -48,15 +48,14 @@ version grandMA3. Chaque ligne est ensuite relue ; le plugin signale toute
 ligne absente ou différente. Elle appelle la page **par son nom**, jamais par
 son numéro.
 
-```
-Page "<nom du titre>"
-SetVar $currentSong = "<nom du titre>"
-Off Page Thru - $faderpage - $buttonpage - 101 Thru 120
-Executor 16 At 100
-Select Executor 16
-Goto Cue 0.5
-SpecialMaster 3.1 At <bpm>
-```
+| N° | CMD |
+|---|---|
+| 1 | `Page "<nom du titre>"` |
+| 2 | `Select Executor 16` |
+| 3 | `Executor 16 At 100` |
+| 4 | `SpecialMaster 3.1 At <bpm>` |
+| 5 | `Goto Cue 0.5` |
+| 6 | `Off Page Thru - $faderpage - $ButtonPage - 101 Thru - 1` |
 
 ## Réglages
 

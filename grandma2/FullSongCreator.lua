@@ -16,8 +16,8 @@ local EXEC_EXTRA_FIRST = 121            -- executors des sequences extras
 local EXEC_EXTRA_LAST  = 130
 local SPEEDMASTER      = '3.1'          -- SpecialMaster qui recoit le BPM
 -- Pages jamais eteintes par la macro de titre, en plus de la page du titre
--- ($faderpage / $buttonpage). Equivalent MA3 : "- Page 101 Thru 120".
-local EXCLUSIONS       = '- 101 Thru 120'
+-- ($faderpage / $ButtonPage) : fin de la derniere ligne de la macro.
+local EXCLUSIONS       = '- 101 Thru - 1'
 -- DEBUG = true : detail de chaque ligne relue dans la ligne de commande.
 local DEBUG            = true
 -- ======================================================================
@@ -162,12 +162,11 @@ local function Start()
   -- 5. Macro de titre : appel par NOM de page, jamais par numero
   local lines = {
     string.format('Page "%s"', name),
-    string.format('SetVar $currentSong = "%s"', name),
-    'Off Page Thru - $faderpage - $buttonpage ' .. EXCLUSIONS,
-    'Executor ' .. EXEC_MAIN .. ' At 100',
     'Select Executor ' .. EXEC_MAIN,
-    'Goto Cue 0.5',
+    'Executor ' .. EXEC_MAIN .. ' At 100',
     'SpecialMaster ' .. SPEEDMASTER .. ' At ' .. tostring(bpm),
+    'Goto Cue 0.5',
+    'Off Page Thru - $faderpage - $ButtonPage ' .. EXCLUSIONS,
   }
   local M = macroAddr(macroNum)
   if exists(M) then
