@@ -33,11 +33,15 @@ affiché avant toute modification.
 | Cue | Nom | Trig | CMD |
 |---|---|---|---|
 | 0.5 | Mise | — | — |
-| 0.6 | Select Timecode | Follow | `Select Timecode '<nom du titre>'` |
-| 0.7 | Go Timecode | Follow | `Go Timecode '<nom du titre>'` |
+| 0.6 | Select Timecode | Follow | `Select Timecode "<nom du titre>"` |
+| 0.7 | Go Timecode | Follow | `Go Timecode "<nom du titre>"` |
 | 1 à 20 | cues du titre | — | — |
 | 21 | Black Out | — | — |
-| 22 | Off Timecode | Follow | `Off Timecode '<nom du titre>'` |
+| 22 | Off Timecode | Follow | `Off Timecode "<nom du titre>"` |
+
+Les commandes des cues sont écrites avec `Assign ... /cmd='...'` : les
+apostrophes délimitent la commande pour pouvoir y mettre le nom du timecode
+entre `"` (MA2 n'accepte pas de `"` dans `/cmd="..."`).
 
 **Extras** : executors 121 à 130. Une séquence extra qui n'existe pas est créée
 vide ; une séquence existante n'est pas modifiée.

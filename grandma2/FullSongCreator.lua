@@ -73,10 +73,10 @@ local function macroAddr(macroNum, line)
   return 'Macro 1.' .. macroNum
 end
 
--- Texte de commande reellement stocke dans une ligne de macro.
+-- Texte de commande (propriete CMD) reellement stocke dans un objet.
 -- Les proprietes sont cherchees par nom pour ne pas dependre de leur ordre.
-local function readMacroLine(macroNum, line)
-  local h = gma.show.getobj.handle(macroAddr(macroNum, line))
+local function readCmd(addr)
+  local h = gma.show.getobj.handle(addr)
   if not h then return nil end
   local p = gma.show.property
   for i = 0, p.amount(h) - 1 do
@@ -86,6 +86,10 @@ local function readMacroLine(macroNum, line)
     end
   end
   return ''
+end
+
+local function readMacroLine(macroNum, line)
+  return readCmd(macroAddr(macroNum, line))
 end
 
 -- La console renvoie le texte relu avec des codes couleur : on les retire
@@ -167,11 +171,17 @@ local function run()
   cmd('Label ' .. S .. ' Cue 0.7 "Go Timecode"')
   cmd('Label ' .. S .. ' Cue 21 "Black Out"')
   cmd('Label ' .. S .. ' Cue 22 "Off Timecode"')
-  -- Commandes des cues timecode : le timecode porte le nom du titre.
-  -- Apostrophes car MA2 n'accepte pas de " dans /cmd="...".
-  cmd(string.format("Assign %s Cue 0.6 /cmd=\"Select Timecode '%s'\"", S, name))
-  cmd(string.format("Assign %s Cue 0.7 /cmd=\"Go Timecode '%s'\"", S, name))
-  cmd(string.format("Assign %s Cue 22 /cmd=\"Off Timecode '%s'\"", S, name))
+  -- Commandes des cues timecode : le timecode porte le nom du titre, qui
+  -- doit etre entre ". MA2 n'accepte pas de " dans /cmd="...", la commande
+  -- est donc delimitee par des apostrophes : /cmd='Go Timecode "titre"'.
+  local cueCmds = {
+    { '0.6', 'Select Timecode "' .. name .. '"' },
+    { '0.7', 'Go Timecode "' .. name .. '"' },
+    { '22',  'Off Timecode "' .. name .. '"' },
+  }
+  for _, c in ipairs(cueCmds) do
+    cmd(string.format("Assign %s Cue %s /cmd='%s'", S, c[1], c[2]))
+  end
   cmd('Assign ' .. S .. ' Cue 0.6 /trig=follow')
   cmd('Assign ' .. S .. ' Cue 0.7 /trig=follow')
   cmd('Assign ' .. S .. ' Cue 22 /trig=follow')
@@ -213,6 +223,18 @@ local function run()
   -- 6. Verification : relecture de chaque ligne stockee
   gma.sleep(0.3)  -- gma.cmd est asynchrone
   local errors = {}
+  for _, c in ipairs(cueCmds) do
+    local got = readCmd(S .. ' Cue ' .. c[1])
+    if got == nil then
+      log('Cue ' .. c[1] .. ' : relecture impossible, verifier dans la sequence')
+    else
+      local ok = clean(got) == clean(c[2])
+      log(string.format('Cue %s %s : %s', c[1], ok and 'OK' or 'ERREUR', got))
+      if not ok then
+        errors[#errors + 1] = 'Cue ' .. c[1] .. ' attendue : ' .. c[2]
+      end
+    end
+  end
   for i, text in ipairs(lines) do
     local got = readMacroLine(macroNum, i)
     local ok = got ~= nil and clean(got) == clean(text)
@@ -225,7 +247,7 @@ local function run()
   end
 
   if #errors > 0 then
-    gma.gui.msgbox(TITLE, 'Macro ' .. macroNum .. ' : ' .. #errors .. ' ligne(s) incorrecte(s)|'
+    gma.gui.msgbox(TITLE, #errors .. ' commande(s) incorrecte(s)|'
       .. table.concat(errors, '|') .. '||Detail dans la ligne de commande ([FSC]).')
     return
   end
