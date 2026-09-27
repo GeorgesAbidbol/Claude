@@ -20,12 +20,22 @@ local SPEEDMASTER      = '3.1'          -- SpecialMaster qui recoit le BPM
 -- ($faderpage / $buttonpage). Equivalent MA3 : "- Page 101 Thru 120".
 local EXCLUSIONS       = '- 101 Thru 120'
 local TMP_FILE         = 'FullSongCreator_tmp.xml'
+-- DEBUG = true : le fichier XML temporaire est conserve et son contenu
+-- est affiche en ligne de commande, pour diagnostiquer l'import.
+local DEBUG            = true
 -- ======================================================================
 
 local TITLE = 'FULL SONG CREATOR'
 
+-- gma.echo n'ecrit que dans le System Monitor ; gma.feedback ecrit dans
+-- la ligne de commande. On ecrit dans les deux pour voir ce qui s'execute.
+local function log(msg)
+  gma.echo('[FSC] ' .. msg)
+  gma.feedback('[FSC] ' .. msg)
+end
+
 local function cmd(c)
-  gma.echo('[FSC] ' .. c)
+  log(c)
   gma.cmd(c)
 end
 
@@ -82,7 +92,18 @@ local function writeMacroXml(path, name, lines)
   if not f then return false end
   f:write(table.concat(out, '\n'), '\n')
   f:close()
+  if DEBUG then
+    log('XML ecrit : ' .. path)
+    for _, l in ipairs(out) do log('  ' .. l) end
+  end
   return true
+end
+
+-- Nombre de lignes de la macro (0 si elle n'existe pas).
+local function macroLineCount(macroNum)
+  local h = gma.show.getobj.handle('Macro 1.' .. macroNum)
+  if not h then return nil end
+  return gma.show.getobj.amount(h)
 end
 
 local function Start()
@@ -177,7 +198,23 @@ local function Start()
   end
   cmd('Import "' .. TMP_FILE .. '" At Macro 1.' .. macroNum .. ' /nc')
 
-  gma.feedback('[FSC] Titre "' .. name .. '" cree.')
+  -- 6. Verification : la macro importee contient-elle bien ses lignes ?
+  gma.sleep(0.5)  -- gma.cmd est asynchrone, on laisse l'import se terminer
+  local n = macroLineCount(macroNum)
+  log('Controle macro ' .. macroNum .. ' : '
+    .. (n == nil and 'introuvable' or (n .. ' ligne(s) sur ' .. #lines .. ' attendue(s)')))
+
+  if n ~= #lines then
+    gma.gui.msgbox(TITLE,
+      'La macro ' .. macroNum .. ' n\'a pas ete importee correctement|'
+      .. (n == nil and 'Macro introuvable.' or (n .. ' ligne(s) au lieu de ' .. #lines .. '.')) .. '|'
+      .. 'Fichier XML conserve : ' .. path .. '|'
+      .. 'Detail dans la ligne de commande / System Monitor ([FSC]).')
+    return
+  end
+
+  if not DEBUG then os.remove(path) end
+  log('Titre "' .. name .. '" cree.')
 end
 
 return Start
