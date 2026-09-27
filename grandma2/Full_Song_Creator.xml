@@ -75,19 +75,22 @@
 			<text>Label Macro 1.$MacroNum &quot;$SongName&quot;</text>
 		</Macroline>
 		<Macroline index="24">
-			<text>Store Macro 1.$MacroNum.1 ; Assign Macro 1.$MacroNum.1 /cmd=&quot;Off Page 1 Thru 100&quot;</text>
+			<text>Store Macro 1.$MacroNum.1 ; Assign Macro 1.$MacroNum.1 /cmd=&quot;Page $PageNum&quot;</text>
 		</Macroline>
 		<Macroline index="25">
-			<text>Store Macro 1.$MacroNum.2 ; Assign Macro 1.$MacroNum.2 /cmd=&quot;Page $PageNum&quot;</text>
+			<text>Store Macro 1.$MacroNum.2 ; Assign Macro 1.$MacroNum.2 /cmd=&quot;Select Executor $PageNum.16&quot;</text>
 		</Macroline>
 		<Macroline index="26">
 			<text>Store Macro 1.$MacroNum.3 ; Assign Macro 1.$MacroNum.3 /cmd=&quot;Executor $PageNum.16 At 100&quot;</text>
 		</Macroline>
 		<Macroline index="27">
-			<text>Store Macro 1.$MacroNum.4 ; Assign Macro 1.$MacroNum.4 /cmd=&quot;Goto Cue 0.5 Executor $PageNum.16&quot;</text>
+			<text>Store Macro 1.$MacroNum.4 ; Assign Macro 1.$MacroNum.4 /cmd=&quot;SpecialMaster 3.1 At $BPM&quot;</text>
 		</Macroline>
 		<Macroline index="28">
-			<text>Store Macro 1.$MacroNum.5 ; Assign Macro 1.$MacroNum.5 /cmd=&quot;SpecialMaster 3.1 At $BPM&quot;</text>
+			<text>Store Macro 1.$MacroNum.5 ; Assign Macro 1.$MacroNum.5 /cmd=&quot;Goto Cue 0.5&quot;</text>
+		</Macroline>
+		<Macroline index="29">
+			<text>Store Macro 1.$MacroNum.6 ; Assign Macro 1.$MacroNum.6 /cmd=&quot;Off Page Thru - $PageNum - 41&quot;</text>
 		</Macroline>
 	</Macro>
 </MA>
