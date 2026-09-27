@@ -49,6 +49,9 @@ ligne absente ou différente. Elle appelle la page **par son nom**, jamais par
 son numéro. Le nom est entre apostrophes : MA2 n'accepte pas de `"` à
 l'intérieur de `/cmd="..."`. Le nom du titre ne peut donc contenir ni `"` ni `'`.
 
+Validé sur grandMA2 onPC 3.9.60 (27/09/2026) : création complète, et la macro
+de titre change bien de page avec `Page '<nom>'`.
+
 | N° | CMD |
 |---|---|
 | 1 | `Page '<nom du titre>'` |
