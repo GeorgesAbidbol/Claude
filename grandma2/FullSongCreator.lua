@@ -88,6 +88,12 @@ local function readCmd(addr)
   return ''
 end
 
+-- Nom de la variable globale qui contient le nom du timecode entre " :
+-- "AU BOUT DE LA NUIT" -> TC_AU_BOUT_DE_LA_NUIT
+local function tcVarName(name)
+  return 'TC_' .. (name:upper():gsub('[^%w]', '_'))
+end
+
 local function readMacroLine(macroNum, line)
   return readCmd(macroAddr(macroNum, line))
 end
@@ -171,16 +177,21 @@ local function run()
   cmd('Label ' .. S .. ' Cue 0.7 "Go Timecode"')
   cmd('Label ' .. S .. ' Cue 21 "Black Out"')
   cmd('Label ' .. S .. ' Cue 22 "Off Timecode"')
-  -- Commandes des cues timecode : le timecode porte le nom du titre, qui
-  -- doit etre entre ". MA2 n'accepte pas de " dans /cmd="...", la commande
-  -- est donc delimitee par des apostrophes : /cmd='Go Timecode "titre"'.
+  -- Commandes des cues timecode : le timecode est appele par son nom, qui
+  -- doit etre entre ". La ligne de commande MA2 ne peut pas ecrire de " dans
+  -- /cmd="..." : le nom entre " est range dans une variable globale (ecrite
+  -- par l'API Lua, sans passer par la ligne de commande) et la cue appelle
+  -- la variable. Au Go, MA2 remplace $TC_TITRE par "TITRE".
+  local tcVar = tcVarName(name)
+  gma.show.setvar(tcVar, '"' .. name .. '"')
+  log('Variable $' .. tcVar .. ' = ' .. tostring(gma.show.getvar(tcVar)))
   local cueCmds = {
-    { '0.6', 'Select Timecode "' .. name .. '"' },
-    { '0.7', 'Go Timecode "' .. name .. '"' },
-    { '22',  'Off Timecode "' .. name .. '"' },
+    { '0.6', 'Select Timecode $' .. tcVar },
+    { '0.7', 'Go Timecode $' .. tcVar },
+    { '22',  'Off Timecode $' .. tcVar },
   }
   for _, c in ipairs(cueCmds) do
-    cmd(string.format("Assign %s Cue %s /cmd='%s'", S, c[1], c[2]))
+    cmd(string.format('Assign %s Cue %s /cmd="%s"', S, c[1], c[2]))
   end
   cmd('Assign ' .. S .. ' Cue 0.6 /trig=follow')
   cmd('Assign ' .. S .. ' Cue 0.7 /trig=follow')
@@ -223,6 +234,9 @@ local function run()
   -- 6. Verification : relecture de chaque ligne stockee
   gma.sleep(0.3)  -- gma.cmd est asynchrone
   local errors = {}
+  if gma.show.getvar(tcVar) ~= '"' .. name .. '"' then
+    errors[#errors + 1] = 'Variable $' .. tcVar .. ' attendue : "' .. name .. '"'
+  end
   for _, c in ipairs(cueCmds) do
     local got = readCmd(S .. ' Cue ' .. c[1])
     if got == nil then

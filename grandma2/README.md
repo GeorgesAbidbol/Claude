@@ -33,15 +33,18 @@ affiché avant toute modification.
 | Cue | Nom | Trig | CMD |
 |---|---|---|---|
 | 0.5 | Mise | — | — |
-| 0.6 | Select Timecode | Follow | `Select Timecode "<nom du titre>"` |
-| 0.7 | Go Timecode | Follow | `Go Timecode "<nom du titre>"` |
+| 0.6 | Select Timecode | Follow | `Select Timecode $TC_<TITRE>` |
+| 0.7 | Go Timecode | Follow | `Go Timecode $TC_<TITRE>` |
 | 1 à 20 | cues du titre | — | — |
 | 21 | Black Out | — | — |
-| 22 | Off Timecode | Follow | `Off Timecode "<nom du titre>"` |
+| 22 | Off Timecode | Follow | `Off Timecode $TC_<TITRE>` |
 
-Les commandes des cues sont écrites avec `Assign ... /cmd='...'` : les
-apostrophes délimitent la commande pour pouvoir y mettre le nom du timecode
-entre `"` (MA2 n'accepte pas de `"` dans `/cmd="..."`).
+Le timecode est appelé **par son nom**, qui doit être entre `"`. La ligne de
+commande MA2 ne peut pas écrire de `"` dans `/cmd="..."` (ni avec `/cmd='...'`,
+testé sur console). Le plugin range donc le nom entre guillemets dans une
+variable globale écrite par l'API Lua : `$TC_CLAIRON` = `"CLAIRON"`
+(majuscules, tout caractère autre que lettre/chiffre devient `_`). Au Go de la
+cue, MA2 remplace la variable et exécute `Go Timecode "CLAIRON"`.
 
 **Extras** : executors 121 à 130. Une séquence extra qui n'existe pas est créée
 vide ; une séquence existante n'est pas modifiée.
