@@ -42,7 +42,11 @@ affiché avant toute modification.
 **Extras** : executors 121 à 130. Une séquence extra qui n'existe pas est créée
 vide ; une séquence existante n'est pas modifiée.
 
-**Macro de titre** : elle appelle la page **par son nom**, jamais par son numéro.
+**Macro de titre** : créée directement dans le show, ligne par ligne
+(`Store Macro 1.<n°>.<ligne>` puis `Assign ... /cmd="..."`), comme dans la
+version grandMA3. Chaque ligne est ensuite relue ; le plugin signale toute
+ligne absente ou différente. Elle appelle la page **par son nom**, jamais par
+son numéro.
 
 ```
 Page "<nom du titre>"

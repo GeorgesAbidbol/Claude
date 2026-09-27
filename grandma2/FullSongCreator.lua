@@ -5,10 +5,9 @@
   Ce plugin sert uniquement a CREER un titre. La macro de titre qu'il genere
   est une macro MA2 classique : aucun plugin n'est utilise pendant le show.
 
-  Pourquoi un plugin : en MA2 une $variable entre guillemets n'est pas
-  remplacee, une macro ne peut donc pas ecrire 'Page "<nom>"' ni garder
-  '$faderpage' tel quel dans une autre macro. Le plugin ecrit la macro de
-  titre dans un fichier XML puis l'importe.
+  La macro de titre est creee directement dans le show, ligne par ligne
+  (Store / Assign /cmd), comme dans la version grandMA3. Chaque ligne est
+  ensuite relue pour verifier ce que la console a reellement stocke.
 ]]
 
 -- ============================== REGLAGES ==============================
@@ -19,10 +18,7 @@ local SPEEDMASTER      = '3.1'          -- SpecialMaster qui recoit le BPM
 -- Pages jamais eteintes par la macro de titre, en plus de la page du titre
 -- ($faderpage / $buttonpage). Equivalent MA3 : "- Page 101 Thru 120".
 local EXCLUSIONS       = '- 101 Thru 120'
--- Nom sans extension : MA2 ajoute .xml a l'Export et a l'Import.
-local TMP_NAME         = 'FullSongCreator_tmp'
--- DEBUG = true : le fichier XML temporaire est conserve et son contenu
--- est affiche en ligne de commande, pour diagnostiquer l'import.
+-- DEBUG = true : detail de chaque ligne relue dans la ligne de commande.
 local DEBUG            = true
 -- ======================================================================
 
@@ -70,43 +66,26 @@ local function exists(obj)
   return gma.show.getobj.handle(obj) ~= nil
 end
 
-local function xmlEscape(s)
-  return (s:gsub('&', '&amp;'):gsub('<', '&lt;'):gsub('>', '&gt;'):gsub('"', '&quot;'))
+-- Adresse MA2 d'une macro (pool 1 = Global) ou d'une de ses lignes.
+local function macroAddr(macroNum, line)
+  if line then return 'Macro 1.' .. macroNum .. '.' .. line end
+  return 'Macro 1.' .. macroNum
 end
 
--- Meme structure qu'un Export Macro fait par la console (voir
--- ref_export_macro_3.9.60.xml) : index = numero de macro - 1.
-local function writeMacroXml(path, macroNum, name, lines)
-  local out = {
-    '<?xml version="1.0" encoding="utf-8"?>',
-    '<MA xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://schemas.malighting.de/grandma2/xml/MA" xsi:schemaLocation="http://schemas.malighting.de/grandma2/xml/MA http://schemas.malighting.de/grandma2/xml/3.9.60/MA.xsd" major_vers="3" minor_vers="9" stream_vers="60">',
-    '\t<Info datetime="' .. os.date('%Y-%m-%dT%H:%M:%S') .. '" showfile="" />',
-    '\t<Macro index="' .. (macroNum - 1) .. '" name="' .. xmlEscape(name) .. '">',
-  }
-  for i, text in ipairs(lines) do
-    out[#out + 1] = '\t\t<Macroline index="' .. (i - 1) .. '">'
-    out[#out + 1] = '\t\t\t<text>' .. xmlEscape(text) .. '</text>'
-    out[#out + 1] = '\t\t</Macroline>'
-  end
-  out[#out + 1] = '\t</Macro>'
-  out[#out + 1] = '</MA>'
-
-  local f = io.open(path, 'w')
-  if not f then return false end
-  f:write(table.concat(out, '\n'), '\n')
-  f:close()
-  if DEBUG then
-    log('XML ecrit : ' .. path)
-    for _, l in ipairs(out) do log('  ' .. l) end
-  end
-  return true
-end
-
--- Nombre de lignes de la macro (0 si elle n'existe pas).
-local function macroLineCount(macroNum)
-  local h = gma.show.getobj.handle('Macro ' .. macroNum)
+-- Texte de commande reellement stocke dans une ligne de macro.
+-- Les proprietes sont cherchees par nom pour ne pas dependre de leur ordre.
+local function readMacroLine(macroNum, line)
+  local h = gma.show.getobj.handle(macroAddr(macroNum, line))
   if not h then return nil end
-  return gma.show.getobj.amount(h)
+  local p = gma.show.property
+  for i = 0, p.amount(h) - 1 do
+    local pname = (p.name(h, i) or ''):lower()
+    if DEBUG then log('    prop ' .. i .. ' ' .. tostring(p.name(h, i)) .. ' = ' .. tostring(p.get(h, i))) end
+    if pname == 'command' or pname == 'cmd' then
+      return p.get(h, i)
+    end
+  end
+  return ''
 end
 
 local function Start()
@@ -140,7 +119,7 @@ local function Start()
     'Titre : %s|Page : %d|BPM : %s|Sequence principale : %d (exec %d)|Extras : %d a %d (exec %d a %d)|Macro : %d',
     name, page, tostring(bpm), seqMain, EXEC_MAIN, exStart, exEnd,
     EXEC_EXTRA_FIRST, EXEC_EXTRA_FIRST + nbExtras - 1, macroNum)
-  if exists('Macro ' .. macroNum) then
+  if exists(macroAddr(macroNum)) then
     recap = recap .. '||ATTENTION : la macro ' .. macroNum .. ' existe deja et sera remplacee.'
   end
   if not gma.gui.confirm(TITLE, recap) then return end
@@ -190,38 +169,36 @@ local function Start()
     'Goto Cue 0.5',
     'SpecialMaster ' .. SPEEDMASTER .. ' At ' .. tostring(bpm),
   }
-  local path = gma.show.getvar('PATH') .. '/importexport/' .. TMP_NAME .. '.xml'
-  if not writeMacroXml(path, macroNum, name, lines) then
-    gma.gui.msgbox(TITLE, 'Impossible d\'ecrire ' .. path .. '|La macro de titre n\'a pas ete creee.')
+  local M = macroAddr(macroNum)
+  if exists(M) then
+    cmd('Delete ' .. M .. ' /nc')
+  end
+  cmd('Store ' .. M)
+  cmd(string.format('Label %s "%s"', M, name))
+  for i, text in ipairs(lines) do
+    cmd('Store ' .. macroAddr(macroNum, i))
+    cmd(string.format('Assign %s /cmd="%s"', macroAddr(macroNum, i), text))
+  end
+
+  -- 6. Verification : relecture de chaque ligne stockee
+  gma.sleep(0.3)  -- gma.cmd est asynchrone
+  local errors = {}
+  for i, text in ipairs(lines) do
+    local got = readMacroLine(macroNum, i)
+    local ok = (got == text)
+    log(string.format('Ligne %d %s : %s', i, ok and 'OK' or 'ERREUR',
+      got == nil and '(absente)' or got))
+    if not ok then
+      errors[#errors + 1] = 'Ligne ' .. i .. ' attendue : ' .. text
+    end
+  end
+
+  if #errors > 0 then
+    gma.gui.msgbox(TITLE, 'Macro ' .. macroNum .. ' : ' .. #errors .. ' ligne(s) incorrecte(s)|'
+      .. table.concat(errors, '|') .. '||Detail dans la ligne de commande ([FSC]).')
     return
   end
-  cmd('SelectDrive 1')
-  if exists('Macro ' .. macroNum) then
-    cmd('Delete Macro ' .. macroNum .. ' /nc')
-  end
-  cmd('Import "' .. TMP_NAME .. '" At Macro ' .. macroNum .. ' /nc')
 
-  -- 6. Verification : la macro importee contient-elle bien ses lignes ?
-  -- gma.cmd est asynchrone : on attend la fin de l'import (3 s max).
-  local n
-  for _ = 1, 15 do
-    gma.sleep(0.2)
-    n = macroLineCount(macroNum)
-    if n == #lines then break end
-  end
-  log('Controle macro ' .. macroNum .. ' : '
-    .. (n == nil and 'introuvable' or (n .. ' ligne(s) sur ' .. #lines .. ' attendue(s)')))
-
-  if n ~= #lines then
-    gma.gui.msgbox(TITLE,
-      'La macro ' .. macroNum .. ' n\'a pas ete importee correctement|'
-      .. (n == nil and 'Macro introuvable.' or (n .. ' ligne(s) au lieu de ' .. #lines .. '.')) .. '|'
-      .. 'Fichier XML conserve : ' .. path .. '|'
-      .. 'Detail dans la ligne de commande / System Monitor ([FSC]).')
-    return
-  end
-
-  if not DEBUG then os.remove(path) end
   log('Titre "' .. name .. '" cree.')
 end
 
