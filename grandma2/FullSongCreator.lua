@@ -80,7 +80,6 @@ local function readMacroLine(macroNum, line)
   local p = gma.show.property
   for i = 0, p.amount(h) - 1 do
     local pname = (p.name(h, i) or ''):lower()
-    if DEBUG then log('    prop ' .. i .. ' ' .. tostring(p.name(h, i)) .. ' = ' .. tostring(p.get(h, i))) end
     if pname == 'command' or pname == 'cmd' then
       return p.get(h, i)
     end
@@ -88,12 +87,25 @@ local function readMacroLine(macroNum, line)
   return ''
 end
 
+-- La console renvoie le texte relu avec des codes couleur : on les retire
+-- (et la casse / les espaces) avant de comparer.
+local function clean(s)
+  s = s:gsub('\27%[[%d;]*%a', ''):gsub('%c', '')
+  s = s:gsub('%s+', ' '):gsub('^ ', ''):gsub(' $', '')
+  return s:lower()
+end
+
+-- Texte brut avec les caracteres non imprimables affiches en <code>.
+local function visible(s)
+  return (s:gsub('[^\32-\126]', function(c) return '<' .. c:byte() .. '>' end))
+end
+
 local function Start()
   -- 1. Questions (equivalent des SetUserVariable de la version MA3)
   local name = ask('Nom du titre ?')
   if not name then return end
-  if name:find('"') then
-    gma.gui.msgbox(TITLE, 'Le nom ne doit pas contenir de guillemets (").')
+  if name:find('["\']') then
+    gma.gui.msgbox(TITLE, 'Le nom ne doit contenir ni " ni \'.')
     return
   end
   local page = askNumber('Numero de page ?', true);                     if not page then return end
@@ -159,9 +171,11 @@ local function Start()
     cmd(string.format('Assign %s At Executor %d.%d', E, page, EXEC_EXTRA_FIRST + i))
   end
 
-  -- 5. Macro de titre : appel par NOM de page, jamais par numero
+  -- 5. Macro de titre : appel par NOM de page, jamais par numero.
+  -- MA2 n'accepte pas de " a l'interieur de /cmd="..." : le nom de la
+  -- page est donc entre apostrophes.
   local lines = {
-    string.format('Page "%s"', name),
+    string.format("Page '%s'", name),
     'Select Executor ' .. EXEC_MAIN,
     'Executor ' .. EXEC_MAIN .. ' At 100',
     'SpecialMaster ' .. SPEEDMASTER .. ' At ' .. tostring(bpm),
@@ -184,9 +198,10 @@ local function Start()
   local errors = {}
   for i, text in ipairs(lines) do
     local got = readMacroLine(macroNum, i)
-    local ok = (got == text)
+    local ok = got ~= nil and clean(got) == clean(text)
     log(string.format('Ligne %d %s : %s', i, ok and 'OK' or 'ERREUR',
       got == nil and '(absente)' or got))
+    if not ok and DEBUG and got then log('    brut : ' .. visible(got)) end
     if not ok then
       errors[#errors + 1] = 'Ligne ' .. i .. ' attendue : ' .. text
     end

@@ -46,11 +46,12 @@ vide ; une séquence existante n'est pas modifiée.
 (`Store Macro 1.<n°>.<ligne>` puis `Assign ... /cmd="..."`), comme dans la
 version grandMA3. Chaque ligne est ensuite relue ; le plugin signale toute
 ligne absente ou différente. Elle appelle la page **par son nom**, jamais par
-son numéro.
+son numéro. Le nom est entre apostrophes : MA2 n'accepte pas de `"` à
+l'intérieur de `/cmd="..."`. Le nom du titre ne peut donc contenir ni `"` ni `'`.
 
 | N° | CMD |
 |---|---|
-| 1 | `Page "<nom du titre>"` |
+| 1 | `Page '<nom du titre>'` |
 | 2 | `Select Executor 16` |
 | 3 | `Executor 16 At 100` |
 | 4 | `SpecialMaster 3.1 At <bpm>` |
