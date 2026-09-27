@@ -138,12 +138,12 @@ local function run()
     name, page, tostring(bpm), seqMain, EXEC_MAIN, exStart, exEnd,
     EXEC_EXTRA_FIRST, EXEC_EXTRA_FIRST + nbExtras - 1, macroNum)
   if exists(macroAddr(macroNum)) then
-    recap = recap .. '||ATTENTION : la macro ' .. macroNum .. ' existe deja et sera remplacee.'
+    recap = recap .. '|ATTENTION : macro ' .. macroNum .. ' deja existante, elle sera remplacee'
   end
   log('Reponses : titre="' .. name .. '" page=' .. page .. ' bpm=' .. tostring(bpm)
     .. ' seq=' .. seqMain .. ' extras=' .. exStart .. '-' .. exEnd .. ' macro=' .. macroNum)
   local confirmed = gma.gui.confirm(TITLE, recap)
-  log('Recapitulatif : ' .. tostring(confirmed))
+  log('Recapitulatif : ' .. tostring(confirmed) .. ' (' .. type(confirmed) .. ')')
   if not confirmed then return end
 
   -- 2. Page
