@@ -100,7 +100,7 @@ local function visible(s)
   return (s:gsub('[^\32-\126]', function(c) return '<' .. c:byte() .. '>' end))
 end
 
-local function Start()
+local function run()
   -- 1. Questions (equivalent des SetUserVariable de la version MA3)
   local name = ask('Nom du titre ?')
   if not name then return end
@@ -134,7 +134,11 @@ local function Start()
   if exists(macroAddr(macroNum)) then
     recap = recap .. '||ATTENTION : la macro ' .. macroNum .. ' existe deja et sera remplacee.'
   end
-  if not gma.gui.confirm(TITLE, recap) then return end
+  log('Reponses : titre="' .. name .. '" page=' .. page .. ' bpm=' .. tostring(bpm)
+    .. ' seq=' .. seqMain .. ' extras=' .. exStart .. '-' .. exEnd .. ' macro=' .. macroNum)
+  local confirmed = gma.gui.confirm(TITLE, recap)
+  log('Recapitulatif : ' .. tostring(confirmed))
+  if not confirmed then return end
 
   -- 2. Page
   if not exists('Page ' .. page) then
@@ -214,6 +218,17 @@ local function Start()
   end
 
   log('Titre "' .. name .. '" cree.')
+end
+
+-- Toute erreur Lua est affichee a l'ecran au lieu d'arreter le plugin
+-- sans rien dire.
+local function Start()
+  log('Demarrage')
+  local ok, err = pcall(run)
+  if not ok then
+    log('ERREUR Lua : ' .. tostring(err))
+    gma.gui.msgbox(TITLE, 'Erreur Lua :|' .. tostring(err))
+  end
 end
 
 return Start
