@@ -1,0 +1,47 @@
+name: reaper
+
+on:
+  push:
+    paths: ["reaper/**", ".github/workflows/reaper.yml"]
+  pull_request:
+    paths: ["reaper/**", ".github/workflows/reaper.yml"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: reaper
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build -j4
+      - run: ctest --test-dir build --output-on-failure
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+      - run: cmake --build build -j4
+      - run: ctest --test-dir build --output-on-failure
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reaper_ma3tools-macos
+          path: reaper/build/reaper_ma3tools.dylib
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build -A x64
+      - run: cmake --build build --config Release
+      - run: ctest --test-dir build -C Release --output-on-failure
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reaper_ma3tools-windows
+          path: reaper/build/Release/reaper_ma3tools.dll
