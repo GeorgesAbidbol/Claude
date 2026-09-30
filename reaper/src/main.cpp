@@ -18,6 +18,7 @@
 #include "schedule.hpp"
 #include "sender.hpp"
 #include "template.hpp"
+#include "triggers.hpp"
 
 // REAPER headers last: on Windows and with SWELL they define min/max macros.
 #define NOMINMAX
@@ -46,6 +47,7 @@
 #define REAPERAPI_WANT_GetTrackMediaItem
 #define REAPERAPI_WANT_GetTrackName
 #define REAPERAPI_WANT_GetUserInputs
+#define REAPERAPI_WANT_GetMainHwnd
 #define REAPERAPI_WANT_MIDI_CountEvts
 #define REAPERAPI_WANT_MIDI_GetNote
 #define REAPERAPI_WANT_MIDI_GetPPQPosFromProjQN
@@ -66,6 +68,7 @@ namespace {
 const char* kSection = "MA3Tools";
 const char* kTrackOn = "P_EXT:MA3Tools_on";
 const char* kTrackOff = "P_EXT:MA3Tools_off";
+const char* kTrackDesc = "P_EXT:MA3Tools_desc";
 const char* kTitle = "MA3 Tools";
 
 // ---------------------------------------------------------------- settings
@@ -141,7 +144,7 @@ bool g_was_playing = false;
 Dispatcher g_dispatcher;           // audio thread only
 Schedule* g_dispatch_schedule = nullptr;  // audio thread only
 
-int g_cmd_settings, g_cmd_track, g_cmd_markers, g_cmd_label, g_cmd_toggle, g_cmd_test, g_cmd_report;
+int g_cmd_settings, g_cmd_setup, g_cmd_track, g_cmd_markers, g_cmd_label, g_cmd_toggle, g_cmd_test, g_cmd_report;
 
 // ---------------------------------------------------------------- schedule building
 
@@ -211,6 +214,7 @@ void AddTrackNotes(MediaTrack* tr, std::vector<ScheduledEvent>& out, BuildStats&
           {"item", takename},
           {"page", page.empty() ? std::to_string(pitch) : page},
           {"track", tname},
+          {"velpct", std::to_string((vel * 100 + 63) / 127)},
       };
       const std::string on = ExpandTemplate(on_cmd, vars), off = ExpandTemplate(off_cmd, vars);
       const int k_first = loop_ticks > 0 ? -2 : 0, k_last = loop_ticks > 0 ? 100000 : 0;
@@ -385,12 +389,24 @@ void ActionSettings() {
   Rebuild();
 }
 
-void ActionTrackCommands() {
-  const int n = CountSelectedTracks(nullptr);
-  if (n == 0) {
-    ShowMessageBox("Sélectionnez d'abord la ou les pistes d'extras.", kTitle, 0);
-    return;
+void SetSelectedTracksTrigger(const std::string& on, const std::string& off, const std::string& desc) {
+  for (int i = 0; i < CountSelectedTracks(nullptr); ++i) {
+    MediaTrack* tr = GetSelectedTrack(nullptr, i);
+    GetSetMediaTrackInfo_String(tr, kTrackOn, const_cast<char*>(on.c_str()), true);
+    GetSetMediaTrackInfo_String(tr, kTrackOff, const_cast<char*>(off.c_str()), true);
+    GetSetMediaTrackInfo_String(tr, kTrackDesc, const_cast<char*>(desc.c_str()), true);
   }
+  Rebuild();
+}
+
+bool RequireSelectedTracks() {
+  if (CountSelectedTracks(nullptr) > 0) return true;
+  ShowMessageBox("Sélectionnez d'abord la ou les pistes d'extras.", kTitle, 0);
+  return false;
+}
+
+void ActionTrackCommands() {
+  if (!RequireSelectedTracks()) return;
   MediaTrack* first = GetSelectedTrack(nullptr, 0);
   std::string on = TrackString(first, kTrackOn), off = TrackString(first, kTrackOff);
   char buf[4096];
@@ -399,12 +415,57 @@ void ActionTrackCommands() {
                      "Début de note (ex. Go+ Sequence 12),Fin de note (vide = rien),separator=|,extrawidth=260", buf, sizeof buf))
     return;
   auto v = SplitFields(buf, 2);
-  for (int i = 0; i < n; ++i) {
-    MediaTrack* tr = GetSelectedTrack(nullptr, i);
-    GetSetMediaTrackInfo_String(tr, kTrackOn, const_cast<char*>(v[0].c_str()), true);
-    GetSetMediaTrackInfo_String(tr, kTrackOff, const_cast<char*>(v[1].c_str()), true);
+  SetSelectedTracksTrigger(v[0], v[1], v[0].empty() && v[1].empty() ? "" : "Commande libre");
+}
+
+const int kMenuFree = 1, kMenuNone = 2;
+
+// Setup popup: choose what a note does on the console, then the target number.
+void ActionTrackSetup() {
+  if (!RequireSelectedTracks()) return;
+  const std::string current = TrackString(GetSelectedTrack(nullptr, 0), kTrackDesc);
+
+  HMENU menu = CreatePopupMenu();
+  int pos = 0;
+  if (!current.empty()) {
+    InsertMenu(menu, pos++, MF_BYPOSITION | MF_STRING | MF_GRAYED, 0, ("Actuel : " + current).c_str());
+    InsertMenu(menu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
   }
-  Rebuild();
+  for (Target t : {Target::Sequence, Target::Executor, Target::Macro}) {
+    HMENU sub = CreatePopupMenu();
+    int spos = 0;
+    for (const auto& p : TriggerPresets())
+      if (p.target == t) InsertMenu(sub, spos++, MF_BYPOSITION | MF_STRING, p.id, p.label);
+    InsertMenu(menu, pos++, MF_BYPOSITION | MF_POPUP | MF_STRING, (UINT_PTR)sub, TargetLabel(t));
+  }
+  InsertMenu(menu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+  InsertMenu(menu, pos++, MF_BYPOSITION | MF_STRING, kMenuFree, "Commande libre...");
+  InsertMenu(menu, pos++, MF_BYPOSITION | MF_STRING, kMenuNone, "Ne rien envoyer");
+  POINT pt;
+  GetCursorPos(&pt);
+  const int choice = TrackPopupMenu(menu, TPM_NONOTIFY | TPM_RETURNCMD, pt.x, pt.y, 0, GetMainHwnd(), nullptr);
+  DestroyMenu(menu);  // also destroys the submenus
+
+  if (choice == kMenuFree) return ActionTrackCommands();
+  if (choice == kMenuNone) return SetSelectedTracksTrigger("", "", "");
+  const TriggerPreset* preset = FindPreset(choice);
+  if (!preset) return;  // menu closed
+
+  std::string number = "1", page = "1", exec = "201";
+  if (preset->target == Target::Executor) {
+    char buf[256] = "1|201";
+    if (!GetUserInputs("MA3 Tools : executor", 2, "Page,Executor (ex. 201),separator=|", buf, sizeof buf)) return;
+    auto v = SplitFields(buf, 2);
+    page = v[0];
+    exec = v[1];
+  } else {
+    char buf[256] = "1";
+    const std::string cap = std::string("Numéro de ") + (preset->target == Target::Macro ? "macro" : "séquence");
+    if (!GetUserInputs("MA3 Tools : cible", 1, cap.c_str(), buf, sizeof buf)) return;
+    number = buf;
+  }
+  auto t = BuildTrigger(*preset, number, page, exec);
+  SetSelectedTracksTrigger(t.on, t.off, t.description);
 }
 
 void ActionMarkerSettings() {
@@ -482,7 +543,8 @@ void ActionReport() {
     if (on.empty() && off.empty()) continue;
     char name[512] = "";
     GetTrackName(tr, name, sizeof name);
-    out += "  " + std::string(name) + " : début = [" + on + "]";
+    const std::string desc = TrackString(tr, kTrackDesc);
+    out += "  " + std::string(name) + (desc.empty() ? "" : " (" + desc + ")") + " : début = [" + on + "]";
     if (!off.empty()) out += ", fin = [" + off + "]";
     out += "\n";
   }
@@ -491,6 +553,7 @@ void ActionReport() {
 
 bool OnAction(KbdSectionInfo*, int cmd, int, int, int, HWND) {
   if (cmd == g_cmd_settings) ActionSettings();
+  else if (cmd == g_cmd_setup) ActionTrackSetup();
   else if (cmd == g_cmd_track) ActionTrackCommands();
   else if (cmd == g_cmd_markers) ActionMarkerSettings();
   else if (cmd == g_cmd_label) ActionLabelCues();
@@ -530,7 +593,8 @@ extern "C" REAPER_PLUGIN_DLL_EXPORT int REAPER_PLUGIN_ENTRYPOINT(REAPER_PLUGIN_H
   g_sender->SetTarget(g_settings.host, g_settings.port);
 
   g_cmd_settings = RegisterAction(rec, "MA3TOOLS_SETTINGS", "MA3 Tools : réglages de la console (IP, port, envoi)");
-  g_cmd_track = RegisterAction(rec, "MA3TOOLS_TRACK_CMD", "MA3 Tools : commande OSC des pistes sélectionnées");
+  g_cmd_setup = RegisterAction(rec, "MA3TOOLS_TRACK_SETUP", "MA3 Tools : régler le déclenchement des pistes sélectionnées");
+  g_cmd_track = RegisterAction(rec, "MA3TOOLS_TRACK_CMD", "MA3 Tools : commande libre des pistes sélectionnées");
   g_cmd_markers = RegisterAction(rec, "MA3TOOLS_MARKERS", "MA3 Tools : réglages de la cuelist principale (marqueurs)");
   g_cmd_label = RegisterAction(rec, "MA3TOOLS_LABEL", "MA3 Tools : nommer les cues avec les noms des marqueurs");
   g_cmd_toggle = RegisterAction(rec, "MA3TOOLS_TOGGLE", "MA3 Tools : activer/désactiver l'envoi");

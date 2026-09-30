@@ -7,6 +7,7 @@
 #include "osc.hpp"
 #include "schedule.hpp"
 #include "template.hpp"
+#include "triggers.hpp"
 
 using namespace ma3;
 
@@ -99,7 +100,32 @@ static void TestDispatcher() {
   CHECK(Run(d, s, 1.95, 0.1).size() == 2);
 }
 
+static void TestTriggers() {
+  const TriggerPreset* p = FindPreset(201);
+  CHECK(p && p->target == Target::Executor);
+  auto t = BuildTrigger(*p, "", "3", "112");
+  CHECK(t.on == "/Page3/Key112 1");
+  CHECK(t.off == "/Page3/Key112 0");
+  CHECK(t.description == "Executor 3.112 : Bouton appuyé pendant la note");
+  auto g = BuildTrigger(*FindPreset(102), "5", "", "");
+  CHECK(g.on == "Goto Sequence 5 Cue {page}");  // {page} stays for per-note expansion
+  CHECK(FindPreset(999) == nullptr);
+  // Ids are unique and never collide with the menu's own entries (1, 2).
+  for (const auto& a : TriggerPresets()) {
+    CHECK(a.id > 2);
+    int n = 0;
+    for (const auto& b : TriggerPresets()) n += a.id == b.id;
+    CHECK(n == 1);
+  }
+  // Every preset produces valid OSC.
+  for (const auto& a : TriggerPresets()) {
+    auto b = BuildTrigger(a, "1", "1", "201");
+    CHECK(!CommandToOsc(ExpandTemplate(b.on, {{"page", "1"}, {"velpct", "100"}}), "").empty());
+  }
+}
+
 int main() {
+  TestTriggers();
   TestEncodeCmd();
   TestPrefix();
   TestRawMessage();

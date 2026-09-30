@@ -27,17 +27,39 @@ Dans le menu OSC de la console : ajoutez une ligne avec le port choisi (par exem
 |---|---|
 | MA3 Tools : réglages de la console | IP et port OSC de la console, préfixe, décalage en ms, envoi actif ou non |
 | MA3 Tools : activer/désactiver l'envoi | Bouton on/off, à mettre dans une barre d'outils |
-| MA3 Tools : commande OSC des pistes sélectionnées | Commande de début de note et, en option, de fin de note |
+| MA3 Tools : régler le déclenchement des pistes sélectionnées | Menu : Séquence, Executor ou Macro, puis l'action, puis le numéro (voir ci-dessous) |
+| MA3 Tools : commande libre des pistes sélectionnées | Commande de début de note et, en option, de fin de note, écrites à la main |
 | MA3 Tools : réglages de la cuelist principale | Go à chaque marqueur, numéro de séquence, première cue, commandes |
 | MA3 Tools : nommer les cues avec les noms des marqueurs | Envoie `Label Sequence 1 Cue N "nom"` pour chaque marqueur, après confirmation |
 | MA3 Tools : envoyer une commande de test | Pour vérifier la liaison |
 | MA3 Tools : afficher le résumé | Liste dans la console REAPER les pistes configurées et le nombre de messages |
 
+### Menu de déclenchement
+Sélectionnez une ou plusieurs pistes d'extras, puis lancez « régler le déclenchement ». Vous pouvez aussi mettre cette action dans le menu clic droit des pistes (Options > Customize menus/toolbars).
+
+| Cible | Choix | Ce qui est envoyé (début / fin de note) |
+|---|---|---|
+| Séquence N | Go+ | `Go+ Sequence N` |
+| | Goto la cue du numéro de page | `Goto Sequence N Cue {page}` (le nombre dans « page 3 ») |
+| | Flash pendant la note | `/13.13.1.6.N` `Flash 1` / `Flash 0` |
+| | Temp pendant la note | `/13.13.1.6.N` `Temp 1` / `Temp 0` |
+| | On pendant la note, puis Off | `On Sequence N` / `Off Sequence N` |
+| | Toggle, Top | `Toggle Sequence N`, `Top Sequence N` |
+| Executor P.E | Bouton appuyé pendant la note | `/PageP/KeyE 1` / `/PageP/KeyE 0` : le bouton fait ce qui lui est assigné sur la console |
+| | Go+ | `Go+ Page P.E` |
+| | Fader à 100 % pendant la note | `FaderMaster Page P.E At 100` / `At 0` |
+| | Fader à la vélocité | `FaderMaster Page P.E At {velpct}` / `At 0` |
+| Macro N | Go+ | `Go+ Macro N` |
+
+Sources : manuel grandMA3, pages « Remote Inputs > OSC » et « OSC Open Stage Control ». À vérifier sur votre version :
+- `/13.13.1.6.N` est l'adresse des séquences dans le datapool 1. Sur la console, `Printf(ObjectList('Sequence 1')[1]:Addr())` donne l'adresse exacte.
+- `/PageP/KeyE` attend 1 pour appuyer et 0 pour relâcher.
+
 ### Écrire une commande
 - **Texte simple** : une ligne de commande grandMA3, envoyée sur `/cmd`. Exemples : `Go+ Sequence 12`, `Flash On Sequence 12`.
 - **Message OSC brut** : commencez par `/`, puis les arguments séparés par des espaces. Les nombres deviennent des entiers ou des flottants, et le texte entre guillemets reste un seul argument. Exemple : `/13.13.1.6.12 Flash 1`.
 - **Variables** :
-  - pistes : `{note}`, `{vel}`, `{chan}`, `{item}` (nom de l'item), `{page}` (le nombre dans « page N »), `{track}` ;
+  - pistes : `{note}`, `{vel}`, `{velpct}` (vélocité en %), `{chan}`, `{item}` (nom de l'item), `{page}` (le nombre dans « page N »), `{track}` ;
   - marqueurs : `{seq}`, `{cue}`, `{n}`, `{name}`, `{qname}` (le nom entre guillemets).
 
   Exemple : `Go+ Sequence 12 Cue {page}`.
@@ -45,6 +67,7 @@ Dans le menu OSC de la console : ajoutez une ligne avec le port choisi (par exem
 ### Notes
 - Les items et les notes MIDI muets sont ignorés. Le mute de la piste ne coupe pas l'OSC : pour ne garder que l'OSC, retirez la sortie MIDI de la piste.
 - Les items en boucle sont pris en compte.
+- Sous Windows, les accents des menus peuvent mal s'afficher.
 - Le décalage (ms) avance ou retarde tous les messages. La latence de sortie audio est déjà compensée, pour que les messages arrivent en même temps que le timecode.
 - « Nommer les cues » ne crée pas les cues : elles doivent déjà exister dans la séquence. Le manuel grandMA3 ne décrit pas de façon de créer une cue vide en ligne de commande. À vérifier sur grandMA3 onPC.
 

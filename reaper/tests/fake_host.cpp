@@ -83,10 +83,43 @@ static int Audio_RegHardwareHook(bool add, audio_hook_register_t* r) { g_hook = 
 static void ShowConsoleMsg(const char* m) { std::fputs(m, stdout); }
 static bool GetTrackName(MediaTrack* tr, char* buf, int) { std::strcpy(buf, reinterpret_cast<Track*>(tr)->name.c_str()); return true; }
 static double TimeMap2_timeToQN(ReaProject*, double t) { return t / kQN; }
-static bool GetUserInputs(const char*, int, const char*, char*, int) { return false; }
+static std::vector<std::string> g_inputs;  // scripted answers for GetUserInputs
+static bool GetUserInputs(const char*, int, const char*, char* buf, int sz) {
+  if (g_inputs.empty()) return false;
+  std::snprintf(buf, size_t(sz), "%s", g_inputs.front().c_str());
+  g_inputs.erase(g_inputs.begin());
+  return true;
+}
 static int ShowMessageBox(const char* msg, const char*, int) { std::printf("[message] %s\n", msg); return 1; }
-static int CountSelectedTracks(ReaProject*) { return 0; }
-static MediaTrack* GetSelectedTrack(ReaProject*, int) { return nullptr; }
+static Track* g_selected = nullptr;
+static int CountSelectedTracks(ReaProject*) { return g_selected ? 1 : 0; }
+static MediaTrack* GetSelectedTrack(ReaProject*, int) { return reinterpret_cast<MediaTrack*>(g_selected); }
+static HWND GetMainHwnd() { return nullptr; }
+
+// Fake SWELL menus: TrackPopupMenu returns the scripted command id if the menu
+// (or a submenu) really contains it, else 0 (menu closed).
+struct FakeMenu { std::vector<std::pair<unsigned long, FakeMenu*>> items; std::vector<std::string> labels; };
+static int g_menu_choice = 0;
+static std::vector<std::string> g_menu_labels;
+static HMENU Fake_CreatePopupMenu() { return reinterpret_cast<HMENU>(new FakeMenu); }
+static void Fake_SWELL_InsertMenu(HMENU m, int, unsigned int flag, UINT_PTR idx, const char* str) {
+  auto* fm = reinterpret_cast<FakeMenu*>(m);
+  fm->items.push_back({(unsigned long)idx, (flag & MF_POPUP) ? reinterpret_cast<FakeMenu*>(idx) : nullptr});
+  fm->labels.push_back(str ? str : "");
+}
+static bool MenuHas(FakeMenu* m, int id) {
+  for (size_t i = 0; i < m->items.size(); ++i) {
+    g_menu_labels.push_back(m->labels[i]);
+    if (m->items[i].second ? MenuHas(m->items[i].second, id) : int(m->items[i].first) == id) return true;
+  }
+  return false;
+}
+static int Fake_TrackPopupMenu(HMENU m, int, int, int, int, HWND, const RECT*) {
+  g_menu_labels.clear();
+  return MenuHas(reinterpret_cast<FakeMenu*>(m), g_menu_choice) ? g_menu_choice : 0;
+}
+static void Fake_DestroyMenu(HMENU) {}
+static void Fake_GetCursorPos(POINT* pt) { pt->x = pt->y = 0; }
 }
 
 static std::map<std::string, void*> g_funcs = {
@@ -97,9 +130,19 @@ static std::map<std::string, void*> g_funcs = {
     F(GetMediaItemTake_Source), F(GetMediaSourceLength), F(GetSetMediaItemTakeInfo_String), F(CountProjectMarkers),
     F(EnumProjectMarkers3), F(GetPlayStateEx), F(GetPlayPosition2Ex), F(GetProjectStateChangeCount),
     F(GetOutputLatency), F(Audio_RegHardwareHook), F(ShowConsoleMsg), F(GetTrackName), F(TimeMap2_timeToQN),
-    F(GetUserInputs), F(ShowMessageBox), F(CountSelectedTracks), F(GetSelectedTrack),
+    F(GetUserInputs), F(ShowMessageBox), F(CountSelectedTracks), F(GetSelectedTrack), F(GetMainHwnd),
 #undef F
 };
+
+static std::map<std::string, void*> g_swell_funcs = {
+    {"CreatePopupMenu", (void*)Fake_CreatePopupMenu}, {"SWELL_InsertMenu", (void*)Fake_SWELL_InsertMenu},
+    {"TrackPopupMenu", (void*)Fake_TrackPopupMenu}, {"DestroyMenu", (void*)Fake_DestroyMenu},
+    {"GetCursorPos", (void*)Fake_GetCursorPos},
+};
+static void* GetSwellFunc(const char* name) {
+  auto it = g_swell_funcs.find(name ? name : "");
+  return it == g_swell_funcs.end() ? nullptr : it->second;
+}
 
 static void* GetFunc(const char* name) {
   auto it = g_funcs.find(name);
@@ -154,6 +197,18 @@ int main(int argc, char** argv) {
 
   void* lib = dlopen(argv[1], RTLD_NOW);
   if (!lib) { std::printf("dlopen: %s\n", dlerror()); return 2; }
+#ifdef __linux__
+  // REAPER hands its SWELL functions to extensions through SWELL_dllMain (Linux).
+  auto swell_main = (int (*)(HINSTANCE, DWORD, LPVOID))dlsym(lib, "SWELL_dllMain");
+  if (swell_main) {
+    std::fflush(stdout);
+    FILE* keep = stdout;
+    stdout = std::fopen("/dev/null", "w");  // silence "SWELL API not found" for the ones we don't fake
+    swell_main(nullptr, DLL_PROCESS_ATTACH, (LPVOID)GetSwellFunc);
+    std::fclose(stdout);
+    stdout = keep;
+  }
+#endif
   auto entry = (int (*)(REAPER_PLUGIN_HINSTANCE, reaper_plugin_info_t*))dlsym(lib, "ReaperPluginEntry");
   reaper_plugin_info_t rec{};
   rec.caller_version = REAPER_PLUGIN_VERSION;
@@ -175,6 +230,31 @@ int main(int argc, char** argv) {
   std::printf("[host] action: report\n");
   g_onaction(nullptr, g_actions["MA3TOOLS_REPORT"], 0, 0, 0, nullptr);
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+  int failures = 0;
+#ifdef __linux__
+  // Setup menu: pick a preset, answer the number dialog, check what the track stores.
+  auto setup = [&](int choice, std::vector<std::string> answers) {
+    g_menu_choice = choice;
+    g_inputs = answers;
+    g_onaction(nullptr, g_actions["MA3TOOLS_TRACK_SETUP"], 0, 0, 0, nullptr);
+    return std::make_pair(g_selected->ext["P_EXT:MA3Tools_on"], g_selected->ext["P_EXT:MA3Tools_off"]);
+  };
+  auto expect = [&](std::pair<std::string, std::string> got, const char* on, const char* off) {
+    const bool ok = got.first == on && got.second == off;
+    std::printf("[host] setup -> on=[%s] off=[%s] %s\n", got.first.c_str(), got.second.c_str(), ok ? "OK" : "MISMATCH");
+    if (!ok) ++failures;
+  };
+  g_selected = &g_tracks[0];
+  expect(setup(103, {"7"}), "/13.13.1.6.7 Flash 1", "/13.13.1.6.7 Flash 0");
+  expect(setup(203, {"2|205"}), "FaderMaster Page 2.205 At 100", "FaderMaster Page 2.205 At 0");
+  expect(setup(301, {"4"}), "Go+ Macro 4", "");
+  expect(setup(0, {}), "Go+ Macro 4", "");           // menu closed: unchanged
+  expect(setup(202, {}), "Go+ Macro 4", "");         // number dialog cancelled: unchanged
+  expect(setup(2, {}), "", "");                      // "Ne rien envoyer"
+  std::printf("[host] menu labels seen: %d\n", int(g_menu_labels.size()));
+#endif
+
   entry(nullptr, nullptr);
-  return 0;
+  return failures ? 1 : 0;
 }
