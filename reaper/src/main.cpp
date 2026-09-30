@@ -422,6 +422,20 @@ void ActionTrackCommands() {
 
 const int kMenuFree = 1, kMenuNone = 2;
 
+// Menu text is UTF-8. Windows menus need UTF-16 for the accents to show.
+void AddMenuItem(HMENU menu, int pos, unsigned int flags, UINT_PTR id, const char* text) {
+#ifdef _WIN32
+  if (text) {
+    wchar_t wide[512];
+    if (MultiByteToWideChar(CP_UTF8, 0, text, -1, wide, 512) > 0) {
+      InsertMenuW(menu, pos, flags, id, wide);
+      return;
+    }
+  }
+#endif
+  InsertMenu(menu, pos, flags, id, text);
+}
+
 // Setup popup: choose what a note does on the console, then the target number.
 void ActionTrackSetup() {
   if (!RequireSelectedTracks()) return;
@@ -430,24 +444,24 @@ void ActionTrackSetup() {
   HMENU menu = CreatePopupMenu();
   int pos = 0;
   if (!current.empty()) {
-    InsertMenu(menu, pos++, MF_BYPOSITION | MF_STRING | MF_GRAYED, 0, ("Actuel : " + current).c_str());
-    InsertMenu(menu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+    AddMenuItem(menu, pos++, MF_BYPOSITION | MF_STRING | MF_GRAYED, 0, ("Actuel : " + current).c_str());
+    AddMenuItem(menu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
   }
   // Executor buttons first (the key does what it is set to on the console),
   // then the other targets in submenus.
   for (const auto& p : TriggerPresets())
-    if (p.target == Target::Button) InsertMenu(menu, pos++, MF_BYPOSITION | MF_STRING, p.id, p.label);
-  InsertMenu(menu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+    if (p.target == Target::Button) AddMenuItem(menu, pos++, MF_BYPOSITION | MF_STRING, p.id, p.label);
+  AddMenuItem(menu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
   for (Target t : {Target::Sequence, Target::Macro}) {
     HMENU sub = CreatePopupMenu();
     int spos = 0;
     for (const auto& p : TriggerPresets())
-      if (p.target == t) InsertMenu(sub, spos++, MF_BYPOSITION | MF_STRING, p.id, p.label);
-    InsertMenu(menu, pos++, MF_BYPOSITION | MF_POPUP | MF_STRING, (UINT_PTR)sub, TargetLabel(t));
+      if (p.target == t) AddMenuItem(sub, spos++, MF_BYPOSITION | MF_STRING, p.id, p.label);
+    AddMenuItem(menu, pos++, MF_BYPOSITION | MF_POPUP | MF_STRING, (UINT_PTR)sub, TargetLabel(t));
   }
-  InsertMenu(menu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
-  InsertMenu(menu, pos++, MF_BYPOSITION | MF_STRING, kMenuFree, "Commande libre...");
-  InsertMenu(menu, pos++, MF_BYPOSITION | MF_STRING, kMenuNone, "Ne rien envoyer");
+  AddMenuItem(menu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+  AddMenuItem(menu, pos++, MF_BYPOSITION | MF_STRING, kMenuFree, "Commande libre...");
+  AddMenuItem(menu, pos++, MF_BYPOSITION | MF_STRING, kMenuNone, "Ne rien envoyer");
   POINT pt;
   GetCursorPos(&pt);
   const int choice = TrackPopupMenu(menu, TPM_NONOTIFY | TPM_RETURNCMD, pt.x, pt.y, 0, GetMainHwnd(), nullptr);

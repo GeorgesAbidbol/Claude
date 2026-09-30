@@ -68,7 +68,6 @@ Sources : manuel grandMA3, mots-clés « Press » et « Unpress », pages « Rem
 ### Notes
 - Les items et les notes MIDI muets sont ignorés. Le mute de la piste ne coupe pas l'OSC : pour ne garder que l'OSC, retirez la sortie MIDI de la piste.
 - Les items en boucle sont pris en compte.
-- Sous Windows, les accents des menus peuvent mal s'afficher.
 - Le décalage (ms) avance ou retarde tous les messages. La latence de sortie audio est déjà compensée, pour que les messages arrivent en même temps que le timecode.
 - « Nommer les cues » ne crée pas les cues : elles doivent déjà exister dans la séquence. Le manuel grandMA3 ne décrit pas de façon de créer une cue vide en ligne de commande. À vérifier sur grandMA3 onPC.
 

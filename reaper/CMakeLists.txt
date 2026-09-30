@@ -4,6 +4,12 @@ project(reaper_ma3tools VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+  # Static C++ runtime: the DLL loads without the Visual C++ Redistributable.
+  set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+  # Sources and string literals are UTF-8 (French accents in menus and dialogs).
+  add_compile_options(/utf-8)
+endif()
 
 option(MA3TOOLS_BUILD_EXTENSION "Build the REAPER extension (downloads the REAPER SDK and WDL)" ON)
 option(MA3TOOLS_BUILD_TESTS "Build the unit tests" ON)
