@@ -10,10 +10,15 @@ namespace ma3 {
 struct ScheduledEvent {
   double time = 0;           // project time in seconds
   std::vector<uint8_t> packet;
+  bool release = false;      // end of a held note (key released)
 };
 
 class Schedule {
  public:
+  // Releases closer than this before a press are sent first, so back-to-back
+  // notes on the same key release then press again instead of the reverse.
+  static constexpr double kTie = 0.0005;
+
   explicit Schedule(std::vector<ScheduledEvent> events);
   const std::vector<ScheduledEvent>& events() const { return events_; }
   // Index of the first event at or after t.

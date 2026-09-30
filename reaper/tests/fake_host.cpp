@@ -246,11 +246,12 @@ int main(int argc, char** argv) {
     if (!ok) ++failures;
   };
   g_selected = &g_tracks[0];
+  expect(setup(201, {"112"}), "Press Executor 112", "Unpress Executor 112");
+  expect(setup(202, {}), "Press Executor {note}", "Unpress Executor {note}");
   expect(setup(103, {"7"}), "/13.13.1.6.7 Flash 1", "/13.13.1.6.7 Flash 0");
-  expect(setup(203, {"2|205"}), "FaderMaster Page 2.205 At 100", "FaderMaster Page 2.205 At 0");
   expect(setup(301, {"4"}), "Go+ Macro 4", "");
   expect(setup(0, {}), "Go+ Macro 4", "");           // menu closed: unchanged
-  expect(setup(202, {}), "Go+ Macro 4", "");         // number dialog cancelled: unchanged
+  expect(setup(101, {}), "Go+ Macro 4", "");         // number dialog cancelled: unchanged
   expect(setup(2, {}), "", "");                      // "Ne rien envoyer"
   std::printf("[host] menu labels seen: %d\n", int(g_menu_labels.size()));
 #endif

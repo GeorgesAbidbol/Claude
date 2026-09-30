@@ -102,30 +102,47 @@ static void TestDispatcher() {
 
 static void TestTriggers() {
   const TriggerPreset* p = FindPreset(201);
-  CHECK(p && p->target == Target::Executor);
-  auto t = BuildTrigger(*p, "", "3", "112");
-  CHECK(t.on == "/Page3/Key112 1");
-  CHECK(t.off == "/Page3/Key112 0");
-  CHECK(t.description == "Executor 3.112 : Bouton appuyé pendant la note");
-  auto g = BuildTrigger(*FindPreset(102), "5", "", "");
-  CHECK(g.on == "Goto Sequence 5 Cue {page}");  // {page} stays for per-note expansion
+  CHECK(p && p->target == Target::Button && p->ask == Ask::Executor);
+  auto t = BuildTrigger(*p, "112");
+  CHECK(t.on == "Press Executor 112");
+  CHECK(t.off == "Unpress Executor 112");
+  CHECK(t.description == "Bouton de l'executor 112 (page courante), tenu pendant la note");
+  auto n = BuildTrigger(*FindPreset(202), "");
+  CHECK(n.on == "Press Executor {note}");  // {note} stays for per-note expansion
+  auto g = BuildTrigger(*FindPreset(102), "5");
+  CHECK(g.on == "Goto Sequence 5 Cue {page}");
   CHECK(FindPreset(999) == nullptr);
   // Ids are unique and never collide with the menu's own entries (1, 2).
   for (const auto& a : TriggerPresets()) {
     CHECK(a.id > 2);
-    int n = 0;
-    for (const auto& b : TriggerPresets()) n += a.id == b.id;
-    CHECK(n == 1);
+    int k = 0;
+    for (const auto& b : TriggerPresets()) k += a.id == b.id;
+    CHECK(k == 1);
   }
   // Every preset produces valid OSC.
   for (const auto& a : TriggerPresets()) {
-    auto b = BuildTrigger(a, "1", "1", "201");
-    CHECK(!CommandToOsc(ExpandTemplate(b.on, {{"page", "1"}, {"velpct", "100"}}), "").empty());
+    auto b = BuildTrigger(a, "201");
+    CHECK(!CommandToOsc(ExpandTemplate(b.on, {{"page", "1"}, {"note", "36"}, {"velpct", "100"}}), "").empty());
   }
+}
+
+// Back-to-back notes on one key: the release of the first goes out before the
+// press of the second, even when float rounding puts it a hair later.
+static void TestReleaseBeforePress() {
+  auto ev = [](double t, uint8_t tag, bool rel) { return ScheduledEvent{t, {tag}, rel}; };
+  Schedule s({ev(1.0, 1, false), ev(2.0, 3, false), ev(2.0001, 2, true), ev(3.0, 4, true), ev(3.0, 5, false)});
+  std::vector<uint8_t> order;
+  for (const auto& e : s.events()) order.push_back(e.packet[0]);
+  CHECK((order == std::vector<uint8_t>{1, 2, 3, 4, 5}));
+  CHECK(s.events()[1].time == 2.0);
+  // A real gap (1 ms) is left alone.
+  Schedule g({ev(1.0, 1, false), ev(1.001, 2, true)});
+  CHECK(g.events()[0].packet[0] == 1);
 }
 
 int main() {
   TestTriggers();
+  TestReleaseBeforePress();
   TestEncodeCmd();
   TestPrefix();
   TestRawMessage();

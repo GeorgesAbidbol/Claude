@@ -161,13 +161,13 @@ std::string TrackString(MediaTrack* tr, const char* key) {
 }
 
 void AddEvent(std::vector<ScheduledEvent>& out, double t, const std::string& cmd, int& counter,
-              BuildStats& st) {
+              BuildStats& st, bool release = false) {
   auto pkt = CommandToOsc(cmd, g_settings.prefix);
   if (pkt.empty()) {
     ++st.skipped;
     return;
   }
-  out.push_back({t, std::move(pkt)});
+  out.push_back({t, std::move(pkt), release});
   ++counter;
 }
 
@@ -226,7 +226,9 @@ void AddTrackNotes(MediaTrack* tr, std::vector<ScheduledEvent>& out, BuildStats&
         if (!off.empty()) {
           double t_off = MIDI_GetProjTimeFromPPQPos(take, eppq + k * loop_ticks);
           if (t_off > iend) t_off = iend;
-          AddEvent(out, t_off, off, st.note_events, st);
+          // Hold at least 1 ms so the release never overtakes its own press.
+          t_off = std::max(t_off, t_on + 2 * Schedule::kTie);
+          AddEvent(out, t_off, off, st.note_events, st, true);
         }
       }
     }
@@ -431,7 +433,12 @@ void ActionTrackSetup() {
     InsertMenu(menu, pos++, MF_BYPOSITION | MF_STRING | MF_GRAYED, 0, ("Actuel : " + current).c_str());
     InsertMenu(menu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
   }
-  for (Target t : {Target::Sequence, Target::Executor, Target::Macro}) {
+  // Executor buttons first (the key does what it is set to on the console),
+  // then the other targets in submenus.
+  for (const auto& p : TriggerPresets())
+    if (p.target == Target::Button) InsertMenu(menu, pos++, MF_BYPOSITION | MF_STRING, p.id, p.label);
+  InsertMenu(menu, pos++, MF_BYPOSITION | MF_SEPARATOR, 0, nullptr);
+  for (Target t : {Target::Sequence, Target::Macro}) {
     HMENU sub = CreatePopupMenu();
     int spos = 0;
     for (const auto& p : TriggerPresets())
@@ -451,20 +458,20 @@ void ActionTrackSetup() {
   const TriggerPreset* preset = FindPreset(choice);
   if (!preset) return;  // menu closed
 
-  std::string number = "1", page = "1", exec = "201";
-  if (preset->target == Target::Executor) {
-    char buf[256] = "1|201";
-    if (!GetUserInputs("MA3 Tools : executor", 2, "Page,Executor (ex. 201),separator=|", buf, sizeof buf)) return;
-    auto v = SplitFields(buf, 2);
-    page = v[0];
-    exec = v[1];
-  } else {
-    char buf[256] = "1";
-    const std::string cap = std::string("Numéro de ") + (preset->target == Target::Macro ? "macro" : "séquence");
-    if (!GetUserInputs("MA3 Tools : cible", 1, cap.c_str(), buf, sizeof buf)) return;
+  std::string number;
+  if (preset->ask != Ask::None) {
+    char buf[256] = "";
+    const char* cap = preset->ask == Ask::Executor ? "Numéro d'executor (ex. 201)"
+                      : preset->target == Target::Macro ? "Numéro de macro"
+                                                        : "Numéro de séquence";
+    std::snprintf(buf, sizeof buf, "%s", preset->ask == Ask::Executor ? "201" : "1");
+    if (!GetUserInputs("MA3 Tools : cible", 1, cap, buf, sizeof buf)) return;
     number = buf;
+    while (!number.empty() && number.back() == ' ') number.pop_back();
+    while (!number.empty() && number.front() == ' ') number.erase(0, 1);
+    if (number.empty()) return;
   }
-  auto t = BuildTrigger(*preset, number, page, exec);
+  auto t = BuildTrigger(*preset, number);
   SetSelectedTracksTrigger(t.on, t.off, t.description);
 }
 

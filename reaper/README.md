@@ -27,7 +27,7 @@ Dans le menu OSC de la console : ajoutez une ligne avec le port choisi (par exem
 |---|---|
 | MA3 Tools : réglages de la console | IP et port OSC de la console, préfixe, décalage en ms, envoi actif ou non |
 | MA3 Tools : activer/désactiver l'envoi | Bouton on/off, à mettre dans une barre d'outils |
-| MA3 Tools : régler le déclenchement des pistes sélectionnées | Menu : Séquence, Executor ou Macro, puis l'action, puis le numéro (voir ci-dessous) |
+| MA3 Tools : régler le déclenchement des pistes sélectionnées | Menu : bouton d'executor (conseillé), séquence ou macro, puis le numéro (voir ci-dessous) |
 | MA3 Tools : commande libre des pistes sélectionnées | Commande de début de note et, en option, de fin de note, écrites à la main |
 | MA3 Tools : réglages de la cuelist principale | Go à chaque marqueur, numéro de séquence, première cue, commandes |
 | MA3 Tools : nommer les cues avec les noms des marqueurs | Envoie `Label Sequence 1 Cue N "nom"` pour chaque marqueur, après confirmation |
@@ -37,23 +37,24 @@ Dans le menu OSC de la console : ajoutez une ligne avec le port choisi (par exem
 ### Menu de déclenchement
 Sélectionnez une ou plusieurs pistes d'extras, puis lancez « régler le déclenchement ». Vous pouvez aussi mettre cette action dans le menu clic droit des pistes (Options > Customize menus/toolbars).
 
-| Cible | Choix | Ce qui est envoyé (début / fin de note) |
-|---|---|---|
-| Séquence N | Go+ | `Go+ Sequence N` |
-| | Goto la cue du numéro de page | `Goto Sequence N Cue {page}` (le nombre dans « page 3 ») |
-| | Flash pendant la note | `/13.13.1.6.N` `Flash 1` / `Flash 0` |
-| | Temp pendant la note | `/13.13.1.6.N` `Temp 1` / `Temp 0` |
-| | On pendant la note, puis Off | `On Sequence N` / `Off Sequence N` |
-| | Toggle, Top | `Toggle Sequence N`, `Top Sequence N` |
-| Executor P.E | Bouton appuyé pendant la note | `/PageP/KeyE 1` / `/PageP/KeyE 0` : le bouton fait ce qui lui est assigné sur la console |
-| | Go+ | `Go+ Page P.E` |
-| | Fader à 100 % pendant la note | `FaderMaster Page P.E At 100` / `At 0` |
-| | Fader à la vélocité | `FaderMaster Page P.E At {velpct}` / `At 0` |
-| Macro N | Go+ | `Go+ Macro N` |
+Le choix conseillé est le **bouton d'executor** : chaque note appuie sur le bouton de l'executor de la **page courante** et le garde enfoncé jusqu'à la fin de la note, comme une note MIDI tenue. Ce que fait le bouton (Flash, Temp, Go+...) se règle sur l'executor dans la console, pas dans REAPER. Comme on change de page à chaque titre, la même piste pilote le bon executor quelle que soit la page.
 
-Sources : manuel grandMA3, pages « Remote Inputs > OSC » et « OSC Open Stage Control ». À vérifier sur votre version :
+Si deux items se touchent sur la même piste, le relâchement du premier part avant l'appui du second, pour que le bouton soit bien réappuyé.
+
+| Choix | Ce qui est envoyé (début / fin de note) |
+|---|---|
+| Bouton d'un executor (page courante) | `Press Executor E` / `Unpress Executor E` |
+| Bouton de l'executor = numéro de la note | `Press Executor {note}` / `Unpress Executor {note}` |
+| Séquence N > Go+ | `Go+ Sequence N` |
+| Séquence N > Goto la cue du numéro de page | `Goto Sequence N Cue {page}` (le nombre dans « page 3 ») |
+| Séquence N > Flash / Temp pendant la note | `/13.13.1.6.N` `Flash 1` / `Flash 0` (ou `Temp`) |
+| Séquence N > On pendant la note, puis Off | `On Sequence N` / `Off Sequence N` |
+| Séquence N > Toggle, Top | `Toggle Sequence N`, `Top Sequence N` |
+| Macro N > Go+ | `Go+ Macro N` |
+
+Sources : manuel grandMA3, mots-clés « Press » et « Unpress », pages « Remote Inputs > OSC ». À vérifier sur votre version :
+- `Press Executor 201` sans page vise la page courante. Sur un executor à plusieurs boutons, vérifiez sur onPC lequel est appuyé.
 - `/13.13.1.6.N` est l'adresse des séquences dans le datapool 1. Sur la console, `Printf(ObjectList('Sequence 1')[1]:Addr())` donne l'adresse exacte.
-- `/PageP/KeyE` attend 1 pour appuyer et 0 pour relâcher.
 
 ### Écrire une commande
 - **Texte simple** : une ligne de commande grandMA3, envoyée sur `/cmd`. Exemples : `Go+ Sequence 12`, `Flash On Sequence 12`.

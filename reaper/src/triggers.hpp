@@ -7,13 +7,18 @@
 
 namespace ma3 {
 
-enum class Target { Sequence, Executor, Macro };
+// Where a preset sits in the menu: executor buttons first, the rest in submenus.
+enum class Target { Button, Sequence, Macro };
+
+// What the setup dialog asks after the menu choice.
+enum class Ask { None, Executor, Number };
 
 struct TriggerPreset {
   int id;             // menu command id, unique
   Target target;
+  Ask ask;
   const char* label;  // menu text (French)
-  const char* on;     // command at note start; {N} sequence/macro, {P} page, {E} executor
+  const char* on;     // command at note start; {N} sequence/macro, {E} executor
   const char* off;    // command at note end, or "" for none
 };
 
@@ -25,9 +30,8 @@ struct TrackTrigger {
   std::string on, off, description;
 };
 
-// Fills {N}/{P}/{E} with the chosen numbers. Runtime variables such as {page}
-// and {velpct} are kept for the extension to expand per note.
-TrackTrigger BuildTrigger(const TriggerPreset& p, const std::string& number, const std::string& page,
-                          const std::string& exec);
+// Fills {N}/{E} with the chosen number. Runtime variables such as {note},
+// {page} and {velpct} are kept for the extension to expand per note.
+TrackTrigger BuildTrigger(const TriggerPreset& p, const std::string& number);
 
 }  // namespace ma3
