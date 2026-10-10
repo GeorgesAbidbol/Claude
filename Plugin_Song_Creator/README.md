@@ -1,4 +1,4 @@
-# Plugin Song Creator v0.3.0 (grandMA3 2.3.2.0)
+# Plugin Song Creator v0.3.1 (grandMA3 2.3.2.0)
 
 Plugin grandMA3 qui remplace la macro « FULL SONG CREATOR » : une fenêtre de setup,
 puis la création complète d'une song (page, séquences, cues, timecode, executors,
@@ -43,7 +43,13 @@ rien. Un « Export Plugin » depuis un poste où il est déjà vide n'écrit que
   `Off Timecode "Nom"` posées sur les cues TC.
 - Macro de rappel (7 lignes), `$currentSong` conservé tel quel.
 
+## Annuler une song
+Toute la création est regroupée dans une seule action **Oops** : un Oops annule la song entière.
+
 ## Diagnostic
+Chaque commande envoyée est vérifiée : si MA la refuse (« Syntax Error », « Illegal Command »),
+elle est listée en avertissement à la fin de la création et écrite en rouge dans le System Monitor.
+Le démarrage indique aussi la version de grandMA3 détectée.
 Le plugin écrit `[SongCreator] ...` dans le System Monitor (démarrage, propriétés d'interface
 ignorées, erreurs). En cas d'erreur Lua, elle est aussi affichée dans une fenêtre.
 

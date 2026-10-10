@@ -29,6 +29,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.2.0 | grille de tuiles dessinée façon Import/Export, liste en secours |
 | 0.2.1 | taille relative à l'écran, écran 1 ou 2 |
 | 0.2.2 | journal `[SongCreator]` dans le System Monitor, erreurs Lua affichées |
+| 0.3.1 | relecture avec les docs : retour des commandes vérifié (refus listés), création dans une seule action Oops, lignes de macro créées par `Store Macro N.i` puis remplies en Lua, `ClassExists` avant le coin de redimensionnement, version MA écrite au démarrage |
 | 0.3.0 | fenêtre unique sur mesure (écran 1, déplaçable, redimensionnable, croix), récap en direct, boutons « ... » vers la sélection native MA, boîtes MA en secours |
 
 ## Leçons apprises
@@ -50,6 +51,11 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
   sélection native la plus proche (colonnes, filtre clavier).
 - **Plugins MATools** : compilés en bytecode Lua, payants et sous licence ; on s'en inspire pour
   le visuel, on n'en reprend pas le code.
+
+- **`Cmd()` renvoie le retour de la ligne de commande** (« OK », « Syntax Error », « Illegal Command ») :
+  il faut le lire, sinon une commande refusée passe inaperçue.
+- **`CreateUndo()` / `CloseUndo()`** : passer la liste à `Cmd(cmd, undo)` regroupe toute la création dans un seul Oops.
+- **`ClassExists("Classe")`** permet de vérifier un élément d'interface avant de l'ajouter.
 
 ## Ressources
 

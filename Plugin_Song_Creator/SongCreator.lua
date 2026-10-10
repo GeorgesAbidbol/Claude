@@ -10,7 +10,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.3.0"
+local VERSION = "0.3.1"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -36,11 +36,22 @@ local CFG = {
 --  Outils
 -- ---------------------------------------------------------------------------
 local log = {}
+local undo        -- liste Oops de la création en cours (une seule annulation)
+local cmdErrors = {}
 
+-- Exécute une commande et vérifie le retour de MA (« OK », « Syntax Error »,
+-- « Illegal Command »...) : une commande refusée est signalée, pas ignorée.
 local function C(cmd)
   log[#log + 1] = cmd
   Printf("[SongCreator] " .. cmd)
-  Cmd(cmd)
+  local ok, res
+  if undo then ok, res = pcall(Cmd, cmd, undo) else ok, res = pcall(Cmd, cmd) end
+  if not ok then
+    cmdErrors[#cmdErrors + 1] = cmd .. "  ->  " .. tostring(res)
+  elseif res ~= nil and not tostring(res):upper():find("^%s*OK") then
+    cmdErrors[#cmdErrors + 1] = cmd .. "  ->  " .. tostring(res)
+    ErrPrintf("[SongCreator] refusee : " .. cmd .. " -> " .. tostring(res))
+  end
 end
 
 local function trim(s) return ((s or ""):gsub("^%s+", ""):gsub("%s+$", "")) end
@@ -216,6 +227,7 @@ local function makeWindow(overlay, name, title, dispW, dispH, ratioW, ratioH, ro
 
   -- Coin de redimensionnement (bas droite)
   pcall(function()
+    if ClassExists and not ClassExists("ResizeCorner") then return end
     local rc = base:Append("ResizeCorner")
     rc.Anchors = cell(0, #rows)
     opt(rc, { AlignmentH = "Right", AlignmentV = "Bottom" })
@@ -488,10 +500,13 @@ local function buildSongMacro(v, warnings)
     warnings[#warnings + 1] = "Macro " .. v.macro .. " non créée"
     return
   end
-  -- Les lignes sont posées via l'API Lua : "$currentSong" reste tel quel
-  -- (il n'est pas remplacé à la création comme dans l'ancienne macro).
+  -- Lignes créées par « Store Macro N.i » (la commande de l'ancienne macro),
+  -- puis remplies via l'API Lua : "$currentSong" reste tel quel (il n'est pas
+  -- remplacé à la création) et pas de guillemets imbriqués.
+  for i = 1, #lines do C("Store Macro " .. v.macro .. "." .. i) end
   for i, text in ipairs(lines) do
-    local line = macro[i] or macro:Append()
+    local line = macro[i]
+    if not line then pcall(function() line = macro:Append() end) end
     if line then
       line:Set("Command", text)
       log[#log + 1] = "(lua) Macro " .. v.macro .. "." .. i .. " = " .. text
@@ -501,8 +516,7 @@ local function buildSongMacro(v, warnings)
   end
 end
 
-local function create(v)
-  local warnings = {}
+local function createBody(v, warnings)
   local lastExtra = v.seq + v.extras
   local cueBO, cueOffTC = v.cues + 1, v.cues + 2
   local tcName = '"' .. v.name .. '"'
@@ -556,6 +570,21 @@ local function create(v)
   -- 6. Macro de rappel
   buildSongMacro(v, warnings)
 
+end
+
+local function create(v)
+  local warnings = {}
+  cmdErrors = {}
+  -- Toute la création dans une seule liste Oops : un Oops annule la song entière
+  local okU, u = pcall(CreateUndo, "Song Creator " .. v.name)
+  undo = okU and u or nil
+  local ok, err = pcall(createBody, v, warnings)
+  if undo then pcall(CloseUndo, undo) end
+  undo = nil
+  for _, e in ipairs(cmdErrors) do
+    warnings[#warnings + 1] = "Commande refusee : " .. e
+  end
+  if not ok then error(err, 0) end
   return warnings
 end
 
@@ -799,7 +828,8 @@ end
 -- Point d'entrée protégé : toute erreur est écrite dans le System Monitor
 -- et affichée, au lieu d'un plugin qui « ne fait rien ».
 local function Main(displayHandle, argument)
-  Printf("[SongCreator] demarrage v" .. VERSION)
+  local okV, ver = pcall(Version)
+  Printf("[SongCreator] demarrage v" .. VERSION .. " sur grandMA3 " .. (okV and tostring(ver) or "?"))
   local ok, err = xpcall(RealMain, debug.traceback, displayHandle, argument)
   if not ok then
     ErrPrintf("[SongCreator] ERREUR : " .. tostring(err))
