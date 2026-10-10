@@ -51,6 +51,14 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 - **Plugins MATools** : compilés en bytecode Lua, payants et sous licence ; on s'en inspire pour
   le visuel, on n'en reprend pas le code.
 
+## Ressources
+
+Le dossier `Ressources/` du dépôt contient deux références Lua grandMA3 copiées avec leur licence :
+la documentation de l'API (MacTirney, MIT) et des exemples avec la liste des éléments d'interface,
+polices, icônes et couleurs (BakaCowpoke, CC0). À consulter avant de deviner un nom de fonction ou
+de propriété. Elles confirment que `LineEdit`, `ResizeCorner`, la police `Medium20` et l'icône
+`object_plugin1` existent, et que `MessageBox` n'a pas d'option pour choisir l'écran.
+
 ## Reste à faire
 
 - Retour de Jo sur la v0.3.0 sur console (fenêtre, déplacement, redimensionnement, sélection native).
