@@ -1,0 +1,66 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<GMA3 DataVersion="2.3.2.0">
+    <Macro Name="FULL SONG CREATOR" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 01" Appearance="Sound" Note="Creation complete de chanson avec dialog boxes" Tags="DEFAULT Jo:0">
+        <DependencyExport Size="2">
+            <Dependency RelAddr="ShowData.Appearances.Sound" RelAddrNum="14.4.118" Address="ShowData.Appearances.Sound" AddressNum="14.4.118">
+                <Appearance Name="Sound" Guid="FB 17 2B E9 72 08 80 11 02 E4 D4 86 BB CB 7D DB" Color="1.0000000000,1.0000000000,1.0000000000,1.0000000000" MediaFileName="SYMBOL/object/sound1.png">
+                    <DependencyExport Size="1">
+                        <Dependency RelAddr="ShowData.MediaPools.Symbols.[sound1_png]" RelAddrNum="14.2.2.36" Address="ShowData.MediaPools.Symbols.[sound1_png]" AddressNum="14.2.2.36">
+                            <SymbolImage Name="[sound1_png]" Guid="FB 17 2B E9 63 41 80 11 EC 5A 1F 42 BC CB 7D DB" FileName="sound1.png" FilePath="object" ColorKeyLightFrom="FFFFFFFF" ColorKeyLightTo="FFFFFFFF" ColorKeySelectionFrom="FFFFFFFF" ColorKeySelectionTo="FFFFFFFF"/>
+                        </Dependency>
+                    </DependencyExport>
+                </Appearance>
+            </Dependency>
+            <Dependency RelAddr="ShowData.Tags.&apos;DEFAULT Jo&apos;" RelAddrNum="14.5.1" Address="ShowData.Tags.&apos;DEFAULT Jo&apos;" AddressNum="14.5.1">
+                <Tag Name="DEFAULT Jo" Guid="FB 17 2B E9 67 7F 80 10 EF D1 B4 6F B0 C6 09 C4">
+                    <TagReference Name="MACROS"/>
+                </Tag>
+            </Dependency>
+        </DependencyExport>
+        <MacroLine Name="Input Nom" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 02" Command="SetUserVariable &quot;TempSongName&quot; (Song Name ?)"/>
+        <MacroLine Name="Input Page" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 03" Command="SetUserVariable &quot;TempPageNum&quot; ( Page Number ? )"/>
+        <MacroLine Name="Song BMP " Guid="32 41 71 C1 5A F8 10 08 38 F3 3F 00 26 48 FA 80" Command="SetUserVariable &quot;TempBPM&quot; (Song BPM ?)"/>
+        <MacroLine Name="Create Tag" Guid="6A F8 6A DA 0E B9 10 0C 54 E0 C0 B4 08 03 7F CB"/>
+        <MacroLine Name="Create Page" Guid="32 41 71 C1 B4 C1 10 06 60 A1 09 D0 0A 8B 53 ED" Command="Store Page $TempPageNum"/>
+        <MacroLine Name="Goto Page" Guid="32 41 71 C1 4E C9 10 06 38 A6 86 7B 92 B3 62 2D" Command="Page $TempPageNum"/>
+        <MacroLine Name="Label Page" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 20" Command="Label Page $TempPageNum $TempSongName"/>
+        <MacroLine Name="Input Seq Start" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 04" Command="SetUserVariable &quot;TempSeqStart&quot; ( Main Sequence ? )"/>
+        <MacroLine Name="Input Seq ext start End" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 05" Command="SetUserVariable &quot;TempExtraStart&quot; ( First extra ? )"/>
+        <MacroLine Name="Input Seq extra End" Guid="32 41 71 C1 FB B2 10 00 45 89 DD A6 49 55 5D 53" Command="SetUserVariable &quot;TempExtraEnd&quot; ( Last extra ? )"/>
+        <MacroLine Name="Store Sequences" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 06" Command="Store Sequence $TempSeqStart Thru $TempExtraEnd"/>
+        <MacroLine Name="Assign Master Seq" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 07" Command="Assign Sequence $TempSeqStart At Executor 216"/>
+        <MacroLine Name="Label Master Seq" Guid="91 49 20 02 DC EC 4F 66 AF EE B9 3E EC 86 7E D2" Command="Label Sequence $TempSeqStart $TempSongName"/>
+        <MacroLine Name="Label Master Seq" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 08" Command="Note Sequence $TempSeqStart $TempSongName"/>
+        <MacroLine Name="Assign Ext" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 0A" Command="Assign Sequence $TempExtraStart Thru $TempExtraEnd At Executor 121 Thru 130"/>
+        <MacroLine Name="Label 115" Guid="91 49 20 02 D9 5E 5D 28 64 75 A0 43 71 24 0F AE" Command="Label Sequence $TempExtraStart Thru $TempExtraEnd &quot;   "/>
+        <MacroLine Name="Label 115" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 1E" Command="Note Sequence $TempExtraStart Thru $TempExtraEnd $TempSongName"/>
+        <MacroLine Name="Find Free Macro" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 21" Command="SetUserVariable &quot;TempNextMacro&quot; ( Macro Number For Song ?)"/>
+        <MacroLine Name="Build Song Macro" Guid="32 41 71 C1 08 8D 10 08 4B AC D3 3D 28 F9 72 99" Command="Store Macro $TempNextMacro.1 Property &quot;command&quot; &quot;Page &quot;$TempSongName&quot;"/>
+        <MacroLine Name="Build Song Macro" Guid="32 41 71 C1 84 89 10 08 5E 5D 76 DF 9F 3F 36 99" Command="Store Macro $TempNextMacro.2 Property &quot;command&quot; &quot;SetGlobalVariable currentSong &quot;$TempSongName&quot;"/>
+        <MacroLine Name="Build Song Macro" Guid="32 41 71 C1 B7 FF 10 08 51 0E 0A F9 A2 CF E5 99" Command="Store Macro $TempNextMacro.3 Property &quot;command&quot; &quot;Off Page thru -Page $currentSong - Page 101 thru 120&quot;"/>
+        <MacroLine Name="Build Song Macro" Guid="32 41 71 C1 71 85 10 08 77 68 41 B4 91 89 A0 99" Command="Store Macro $TempNextMacro.4 Property &quot;command&quot; &quot;FaderMaster Executor 216 at 100&quot;"/>
+        <MacroLine Name="Build Song Macro" Guid="32 41 71 C1 5E FA 10 08 64 BF AE 9A 6B 7C CC 99" Command="Store Macro $TempNextMacro.5 Property &quot;command&quot; &quot;Select executor 216&quot;"/>
+        <MacroLine Name="Build Song Macro" Guid="32 41 71 C1 EC 8D 10 08 9D CA B9 73 45 3D 42 98" Command="Store Macro $TempNextMacro.6 Property &quot;command&quot; &quot;Goto Cue 0.5&quot;"/>
+        <MacroLine Name="Build Song Macro" Guid="32 41 71 C1 FB A1 10 08 90 7B 5C 2D 0B 0D EB 98" Command="Store Macro $TempNextMacro.7 Property &quot;command&quot; &quot;Master 3.1 at BPM &quot;$TempBPM&quot;"/>
+        <MacroLine Name="Label New Macro" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 23" Command="Label Macro $TempNextMacro $TempSongName"/>
+        <MacroLine Name="Store Tech Cues" Guid="32 41 71 C1 7B D8 10 06 0D 48 F0 D5 FF B6 EC 4A" Command="Select Executor 216"/>
+        <MacroLine Name="Store Tech Cues" Guid="32 41 71 C1 5A F4 10 06 42 C1 19 D1 7A 63 96 4D" Command="Store Cue 0.5 Mise /NoConfirmation"/>
+        <MacroLine Name="Store Tech Cues" Guid="32 41 71 C1 D9 AE 10 06 21 55 52 E6 BC 8F 9C 42" Command="Store Cue 0.6 &quot;Select Timecode&quot; Property &quot;TrigType&quot; &quot;Follow&quot; /NoConfirmation"/>
+        <MacroLine Name="Store Tech Cues" Guid="32 41 71 C1 AB E2 10 06 76 EE 7B FD 34 3A 4F 47" Command="Store Cue 0.7 &quot;Go Timecode&quot; Property &quot;TrigType&quot; &quot;Follow&quot; /NoConfirmation"/>
+        <MacroLine Name="Store Song Cues" Guid="32 41 71 C1 75 A0 10 06 47 B7 8A BD 65 94 31 5A" Command="Store Cue 1 Thru 20 /NoConfirmation"/>
+        <MacroLine Name="Store Tec Cues" Guid="32 41 71 C1 70 E1 10 06 5A 60 2D 5F 54 8A A4 5C" Command="Store Cue 21 &quot;Black Out&quot; /NoConfirmation"/>
+        <MacroLine Guid="32 41 71 C1 81 B8 10 06 6D 11 C1 78 0A 69 2B 51" Command="Store Cue 22 &quot;Off Timecode&quot; Property &quot;TrigType&quot; &quot;Follow&quot; /NoConfirmation"/>
+        <MacroLine Name="Cue Color" Guid="32 41 71 C1 C2 F4 10 06 9B 1B 2D 8E 9D A5 49 17" Command="Assign Appearance &quot;LAVENDER&quot; At Cue 0.6 + 0.7 + 22 ; Assign Appearance &quot;Black&quot; At Cue 21"/>
+        <MacroLine Name="EXEC config" Guid="91 49 20 02 6D 73 F2 02 05 F3 96 F8 BD 24 57 04" Command="Assign Configuration &quot;EXTRAS&quot;At Executor 121 Thru 130"/>
+        <MacroLine Name="EXEC config" Guid="6A F8 6A D3 31 5F 10 06 24 51 AA 24 B6 C8 E0 95" Command="Assign Appearance &quot;BLUE&quot; At Executor 121 Thru 130"/>
+        <MacroLine Name="EXEC config" Guid="91 49 20 02 FE DA 37 29 50 74 AE F3 6F 63 1C 08" Command="Assign Configuration &quot;MAIN SEQUENCE&quot; At Executor 216"/>
+        <MacroLine Name="EXEC config" Guid="6A F8 6A D3 C8 0A 10 06 C7 96 86 D8 99 93 F9 E9" Command="Assign Appearance &quot;GREEN&quot; At Executor 216"/>
+        <MacroLine Name="Cleanup Vars" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 26" Command="DeleteUserVariable &quot;TempSongName&quot;"/>
+        <MacroLine Name="Cleanup Vars 2" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 27" Command="DeleteUserVariable &quot;TempPageNum&quot;"/>
+        <MacroLine Name="Cleanup Vars 3" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 28" Command="DeleteUserVariable &quot;TempSeqStart&quot;"/>
+        <MacroLine Name="Cleanup Vars 4" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 29" Command="DeleteUserVariable &quot;TempExtraStart&quot;"/>
+        <MacroLine Name="Cleanup Vars 5" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 2A" Command="DeleteUserVariable &quot;TempExtraEnd&quot;"/>
+        <MacroLine Name="Cleanup Vars 6" Guid="00 00 00 01 00 00 00 01 00 00 00 03 00 00 00 2B" Command="DeleteUserVariable &quot;TempNextMacro&quot;"/>
+        <MacroLine Guid="32 41 71 C1 37 F1 10 08 E7 77 AB CF 1B CC A6 40" Command="DeleteUserVariable &quot;TempBPM&quot;"/>
+    </Macro>
+</GMA3>
