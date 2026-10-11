@@ -10,7 +10,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.3.4"
+local VERSION = "0.4.0"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -176,9 +176,7 @@ local function Box(opts)
 end
 
 -- ---------------------------------------------------------------------------
---  Fenêtres sur mesure : barre de titre (on la fait glisser pour déplacer
---  la fenêtre), croix de fermeture en haut à droite, coin de
---  redimensionnement en bas à droite, taille de départ relative à l'écran.
+--  Fenêtre sur mesure : outils communs
 -- ---------------------------------------------------------------------------
 
 -- Propriétés « confort » : ignorées une par une si la version ne les connaît pas.
@@ -193,77 +191,12 @@ local function cell(col, row, col2, row2)
   return { left = col, right = col2 or col, top = row, bottom = row2 or row }
 end
 
--- rows : liste { {policy, size}, ... } pour le contenu sous la barre de titre.
-local function makeWindow(overlay, name, title, dispW, dispH, ratioW, ratioH, rows)
-  local base = overlay:Append("BaseInput")
-  base.Name = name
-  base.W = math.floor(dispW * ratioW)
-  base.H = math.floor(dispH * ratioH)
-  base.Columns, base.Rows = 1, 1 + #rows
-  base[1][1].SizePolicy = "Fixed"; base[1][1].Size = "60"
-  for i, r in ipairs(rows) do
-    base[1][i + 1].SizePolicy = r[1]
-    if r[2] then base[1][i + 1].Size = tostring(r[2]) end
-  end
-  opt(base, {
-    MinSize = "600,400",
-    MaxSize = math.floor(dispW) .. "," .. math.floor(dispH),
-    AlignmentH = "Center", AlignmentV = "Center",
-    AutoClose = "No", CloseOnEscape = "Yes",
-  })
-
-  local tb = base:Append("TitleBar")
-  tb.Columns, tb.Rows = 2, 1
-  tb.Anchors = cell(0, 0)
-  tb[2][2].SizePolicy = "Fixed"; tb[2][2].Size = "60"
-  opt(tb, { Texture = "corner2" })
-  local tbt = tb:Append("TitleButton")
-  tbt.Text = title
-  tbt.Anchors = cell(0, 0)
-  opt(tbt, { Texture = "corner1", Icon = "object_plugin1" })
-  local close = tb:Append("CloseButton")
-  close.Anchors = cell(1, 0)
-  opt(close, { Texture = "corner2" })
-
-  -- Coin de redimensionnement (bas droite)
-  pcall(function()
-    if ClassExists and not ClassExists("ResizeCorner") then return end
-    local rc = base:Append("ResizeCorner")
-    rc.Anchors = cell(0, #rows)
-    opt(rc, { AlignmentH = "Right", AlignmentV = "Bottom" })
-  end)
-  return base
-end
-
 local function closeWindow(overlay, base)
   if not IsObjectValid(base) then return end
   local ok = pcall(function() Obj.Delete(overlay, Obj.Index(base)) end)
   if not ok or IsObjectValid(base) then
     pcall(function() overlay:ClearUIChildren() end)
   end
-end
-
-local function addButton(parent, anchors, text, signal, value)
-  local b = parent:Append("Button")
-  b.Anchors = anchors
-  b.Text = text
-  opt(b, { Font = "Medium20", TextalignmentH = "Centre", Textshadow = 1, HasHover = "Yes",
-           Margin = { left = 2, right = 2, top = 2, bottom = 2 } })
-  if signal then
-    b.PluginComponent = myHandle
-    b.Clicked = signal
-    if value then b.SignalValue = value end
-  end
-  return b
-end
-
-local function addText(parent, anchors, text)
-  local t = parent:Append("UIObject")
-  t.Anchors = anchors
-  t.Text = text
-  opt(t, { Font = "Medium20", TextalignmentH = "Left", TextalignmentV = "Top",
-           Padding = { left = 10, right = 10, top = 6, bottom = 6 } })
-  return t
 end
 
 -- ---- Fenêtre de sélection native MA (PopupInput) ----
@@ -400,18 +333,23 @@ end
 local function validate(v)
   if v.name == "" then return "Donne un nom à la song." end
   for _, k in ipairs({ "page", "bpm", "macro", "seq", "extras", "cues", "tcNo" }) do
-    if not v[k] then return "Champ invalide : " .. F[k] end
+    if not v[k] and (k ~= "tcNo" or v.tcOn) then return "Champ invalide : " .. F[k] end
   end
   if v.extras > CFG.maxExtras then return "Maximum " .. CFG.maxExtras .. " extras (executors 121 à 130)." end
   if v.cues < 1 then return "Il faut au moins 1 cue de song." end
 
   local busy = {}
-  if exists("Pages", v.page) then busy[#busy + 1] = "Page " .. v.page end
-  for s = v.seq, v.seq + v.extras do
-    if exists("Sequences", s) then busy[#busy + 1] = "Sequence " .. s end
+  local function add(poolName, label, no)
+    local p = pool(poolName)
+    local o = p and p[no]
+    if not o then return end
+    local nm = o.name and tostring(o.name) or ""
+    busy[#busy + 1] = label .. " " .. no .. ((nm ~= "") and (" « " .. nm .. " »") or "")
   end
-  if exists("Macros", v.macro) then busy[#busy + 1] = "Macro " .. v.macro end
-  if v.tcOn and exists("Timecodes", v.tcNo) then busy[#busy + 1] = "Timecode " .. v.tcNo end
+  add("Pages", "Page", v.page)
+  for s = v.seq, v.seq + v.extras do add("Sequences", "Séquence", s) end
+  add("Macros", "Macro", v.macro)
+  if v.tcOn then add("Timecodes", "Timecode", v.tcNo) end
   return nil, busy
 end
 
@@ -717,105 +655,242 @@ local function create(v)
 end
 
 -- ---------------------------------------------------------------------------
---  Fenêtre de setup sur mesure (écran 1, déplaçable, redimensionnable)
+--  Fenêtre de setup v0.4 (écran 1), sur le modèle de « Search and Modify » :
+--  modes à gauche, réglages au centre, récap à droite, boutons en bas.
+--  Lignes de hauteur fixe : la fenêtre ne s'étire plus, le texte est plus grand.
 -- ---------------------------------------------------------------------------
+local UI = {
+  W = 1040, H = 580,             -- taille de départ (réduite si l'écran est plus petit)
+  title = 50, foot = 64,         -- barre de titre, barre de boutons
+  modesW = 150, recapW = 340,    -- colonne des modes, panneau de droite
+  row = 56, head = 30, sect = 34, pick = 54,
+  fontValue = "Regular24", fontLabel = "Regular18", fontButton = "Regular20",
+  fontSmall = "Regular14",
+}
+
 local ui = {}
 signalTable.SC_Action = function(caller) ui.action = caller.SignalValue end
-signalTable.SC_Toggle = function(caller)
-  caller.State = (tonumber(caller.State) == 1) and 0 or 1
-  ui.dirty = true
+
+local FIELD_ORDER = { "name", "page", "seq", "macro", "tcNo", "bpm", "extras", "cues" }
+
+-- Réglage répété à chaque rafraîchissement : pas de message s'il est refusé.
+local function quiet(obj, k, v) pcall(function() obj[k] = v end) end
+
+local function grid(parent, anchors, cols, rows)
+  local g = parent:Append("UILayoutGrid")
+  g.Columns, g.Rows = cols, rows
+  if anchors then g.Anchors = anchors end
+  return g
+end
+local function fixRow(g, i, size) g[1][i].SizePolicy = "Fixed"; g[1][i].Size = tostring(size) end
+local function fixCol(g, i, size) g[2][i].SizePolicy = "Fixed"; g[2][i].Size = tostring(size) end
+
+local function label(parent, anchors, text, props)
+  local t = parent:Append("UIObject")
+  t.Anchors = anchors
+  t.Text = text
+  opt(t, { Font = UI.fontLabel, HasHover = "No", TextalignmentH = "Center", TextColor = "Global.LabelText" })
+  if props then opt(t, props) end
+  return t
 end
 
-local FIELD_ORDER = { "name", "page", "bpm", "macro", "seq", "extras", "cues", "tcNo" }
+local function field(parent, anchors, value, numeric, prompt)
+  local e = parent:Append("LineEdit")
+  e.Anchors = anchors
+  e.Content = tostring(value or "")
+  opt(e, { Font = UI.fontValue, TextalignmentH = numeric and "Center" or "Left",
+           Padding = "8,4", Margin = { left = 1, right = 1, top = 1, bottom = 1 },
+           VkPluginName = numeric and "TextInputNumOnly" or "TextInput",
+           MaxTextLength = numeric and 5 or 60 })
+  if prompt then opt(e, { Prompt = prompt }) end
+  if numeric then opt(e, { Filter = "0123456789" }) end
+  return e
+end
 
-local function readFields(fields, tcBox)
-  local raw = fields.name.Content or ""
-  local v = { rawName = raw, name = cleanName(raw) }
-  for _, k in ipairs(FIELD_ORDER) do
-    if k ~= "name" then v[k] = toInt(fields[k].Content) end
+local function button(parent, anchors, text, value, icon)
+  local b = parent:Append("Button")
+  b.Anchors = anchors
+  b.Text = text
+  opt(b, { Font = UI.fontButton, HasHover = "Yes", Margin = { left = 1, right = 1, top = 1, bottom = 1 } })
+  if icon then opt(b, { Icon = icon }) end
+  if value then
+    b.PluginComponent = myHandle
+    b.Clicked = "SC_Action"
+    b.SignalValue = value
   end
-  v.tcOn = tonumber(tcBox.State) == 1
+  return b
+end
+
+local function readFields(w)
+  local raw = w.fields.name.Content or ""
+  local v = { rawName = raw, name = cleanName(raw), tcOn = w.tcOn }
+  for _, k in ipairs(FIELD_ORDER) do
+    if k ~= "name" then v[k] = toInt(w.fields[k].Content) end
+  end
   return v
 end
 
-local function signature(fields, tcBox)
+local function signature(w)
   local t = {}
-  for _, k in ipairs(FIELD_ORDER) do t[#t + 1] = tostring(fields[k].Content) end
-  t[#t + 1] = tostring(tcBox.State)
+  for _, k in ipairs(FIELD_ORDER) do t[#t + 1] = tostring(w.fields[k].Content) end
+  t[#t + 1] = tostring(w.tcOn)
   return table.concat(t, "|")
+end
+
+-- Panneau de droite : ce qui sera créé
+local function recapLines(v)
+  local n = v.extras or 0
+  local name = (v.name ~= "" and v.name) or "?"
+  local function q(x) return x and tostring(x) or "?" end
+  local c = v.cues or 0
+  local t = {
+    "Page : " .. q(v.page) .. " « " .. name .. " »",
+    "Séquence : " .. q(v.seq) .. " -> Exec " .. CFG.execMain .. " (" .. appName("main") .. ")",
+  }
+  if n > 0 and v.seq then
+    t[#t + 1] = "Extras : " .. (v.seq + 1) .. " à " .. (v.seq + n) .. " -> Exec "
+             .. CFG.execExtraFrom .. " à " .. (CFG.execExtraFrom + n - 1) .. " (" .. appName("extras") .. ")"
+  else
+    t[#t + 1] = "Extras : aucun"
+  end
+  t[#t + 1] = "Notes : « " .. name .. " » sur " .. (n + 1) .. " séquence" .. (n > 0 and "s" or "")
+  t[#t + 1] = "Cues : 0.5 Mise, 0.6 Select TC, 0.7 Go TC,"
+  t[#t + 1] = "      1 à " .. q(v.cues) .. ", " .. (c + 1) .. " Black Out, " .. (c + 2) .. " Off TC"
+  t[#t + 1] = "Timecode : " .. (v.tcOn and (q(v.tcNo) .. " « " .. name .. " »") or "non")
+  t[#t + 1] = "Macro : " .. q(v.macro) .. " « " .. name .. " », 7 lignes"
+  t[#t + 1] = "Speed Master : " .. CFG.speedMaster .. " à " .. q(v.bpm) .. " BPM"
+  return table.concat(t, "\n")
+end
+
+local function setAlert(w, text, color)
+  w.alert.Text = text
+  quiet(w.alert, "TextColor", color)
+end
+
+local function setTcButton(w)
+  w.tcBtn.Text = w.tcOn and "Oui" or "Non"
+  quiet(w.tcBtn, "Icon", w.tcOn and "CheckboxChecked" or "CheckboxUnchecked")
+  quiet(w.tcBtn, "TextColor", w.tcOn and "Global.Selected" or "Global.Text")
+  quiet(w.fields.tcNo, "Enabled", w.tcOn and "Yes" or "No")
 end
 
 -- Construit la fenêtre ; une erreur ici fait passer à la boîte MA de secours.
 local function buildSetupWindow(v)
   local display, dispW, dispH = pickDisplay()
   local overlay = display.ScreenOverlay
-  local base = makeWindow(overlay, "SongCreatorSetup", "Song Creator  v" .. VERSION,
-                          dispW, dispH, 0.6, 0.7,
-                          { { "Fixed", 60 }, { "Stretch" }, { "Fixed", 200 }, { "Fixed", 80 } })
-  local w = { overlay = overlay, base = base, fields = {}, pickBtn = {} }
+  local W = math.min(UI.W, math.floor(dispW - 40))
+  local H = math.min(UI.H, math.floor(dispH - 40))
 
-  w.msg = addText(base, cell(0, 1), "Remplis le setup puis appuie sur Creer la song.")
+  local base = overlay:Append("BaseInput")
+  base.Name = "SongCreatorSetup"
+  base.W, base.H = W, H
+  base.Columns, base.Rows = 1, 3
+  fixRow(base, 1, UI.title)
+  base[1][2].SizePolicy = "Stretch"
+  fixRow(base, 3, UI.foot)
+  opt(base, { MinSize = "800,480", MaxSize = math.floor(dispW) .. "," .. math.floor(dispH),
+              AlignmentH = "Center", AlignmentV = "Center", AutoClose = "No", CloseOnEscape = "Yes" })
+  local w = { overlay = overlay, base = base, fields = {}, pickBtn = {}, tcOn = v.tcOn }
 
-  -- Formulaire : chaque case de pool a son bouton « ... » qui ouvre
-  -- la fenêtre de sélection native de MA, ancrée sur le bouton.
-  local form = base:Append("UILayoutGrid")
-  form.Columns, form.Rows = 4, 4
-  form.Anchors = cell(0, 2)
-  form[2][2].SizePolicy = "Fixed"; form[2][2].Size = "90"
-  form[2][4].SizePolicy = "Fixed"; form[2][4].Size = "90"
+  -- Barre de titre : on la fait glisser pour déplacer la fenêtre, croix à droite
+  local tb = base:Append("TitleBar")
+  tb.Columns, tb.Rows = 2, 1
+  tb.Anchors = cell(0, 0)
+  fixCol(tb, 2, UI.title)
+  opt(tb, { Texture = "corner2" })
+  local tbt = tb:Append("TitleButton")
+  tbt.Text = "Song Creator   v" .. VERSION
+  tbt.Anchors = cell(0, 0)
+  opt(tbt, { Texture = "corner1", Icon = "object_plugin1", Font = UI.fontButton })
+  local close = tb:Append("CloseButton")
+  close.Anchors = cell(1, 0)
+  opt(close, { Texture = "corner2" })
 
-  local function edit(key, prompt, anchors, numeric)
-    local e = form:Append("LineEdit")
-    e.Anchors = anchors
-    e.Content = tostring(v[key] or "")
-    opt(e, { Prompt = prompt .. " : ", Padding = "5,5",
-             Margin = { left = 2, right = 2, top = 2, bottom = 2 },
-             VkPluginName = numeric and "TextInputNumOnly" or "TextInput",
-             MaxTextLength = numeric and 5 or 60 })
-    if numeric then opt(e, { Filter = "0123456789" }) end
-    w.fields[key] = e
+  local body = grid(base, cell(0, 1), 3, 1)
+  fixCol(body, 1, UI.modesW)
+  fixCol(body, 3, UI.recapW)
+
+  -- Colonne des modes (les autres modes viendront plus tard)
+  local modes = grid(body, cell(0, 0), 1, 6)
+  fixRow(modes, 1, 36)
+  for r = 2, 5 do fixRow(modes, r, 60) end
+  label(modes, cell(0, 0), "Mode :", { TextalignmentH = "Left", Padding = "10,0" })
+  local bCreate = button(modes, cell(0, 1), "Créer")
+  opt(bCreate, { TextColor = "Global.Selected", TextalignmentH = "Left", Padding = "14,0" })
+  for i, t in ipairs({ "Renommer", "Dupliquer", "Supprimer" }) do
+    local b = button(modes, cell(0, i + 1), t)
+    opt(b, { Enabled = "No", TextColor = "Global.Disabled", TextalignmentH = "Left",
+             Padding = "14,0", Font = UI.fontLabel })
   end
-  local function picker(key, col, row)
-    w.pickBtn[key] = addButton(form, cell(col, row), "...", "SC_Action", "pick_" .. key)
+
+  -- Centre : nom, emplacements, réglages
+  local main = grid(body, cell(1, 0), 1, 10)
+  local sizes = { UI.row, 30, UI.sect, UI.head, UI.row, UI.sect, UI.head, UI.row, false, 30 }
+  for i = 1, 10 do
+    if sizes[i] then fixRow(main, i, sizes[i]) else main[1][i].SizePolicy = "Stretch" end
+  end
+  w.fields.name = field(main, cell(0, 0), v.name, false, "Nom de la song : ")
+  w.maName = label(main, cell(0, 1), "", { TextalignmentH = "Left", Padding = "10,0", Font = UI.fontSmall })
+
+  label(main, cell(0, 2), "Emplacements :", { TextColor = "Global.Text", Font = UI.fontButton })
+  local h1 = grid(main, cell(0, 3), 4, 1)
+  for i, t in ipairs({ "Page", "Séquence main", "Macro de rappel", "Timecode" }) do
+    label(h1, cell(i - 1, 0), t)
+  end
+  local places = grid(main, cell(0, 4), 8, 1)
+  for c = 2, 8, 2 do fixCol(places, c, UI.pick) end
+  for i, k in ipairs({ "page", "seq", "macro", "tcNo" }) do
+    w.fields[k] = field(places, cell((i - 1) * 2, 0), v[k], true)
+    local b = button(places, cell((i - 1) * 2 + 1, 0), "", "pick_" .. k)
+    -- flèche de liste ; « ... » si l'icône n'existe pas sur cette version
+    if not pcall(function() b.Icon = "triangle_down" end) then b.Text = "..." end
+    w.pickBtn[k] = b
   end
 
-  edit("name",   "Nom de la song",  cell(0, 0, 3), false)
-  edit("page",   "Page",            cell(0, 1), true);  picker("page", 1, 1)
-  edit("macro",  "Macro de rappel", cell(2, 1), true);  picker("macro", 3, 1)
-  edit("seq",    "Sequence main",   cell(0, 2), true);  picker("seq", 1, 2)
-  edit("tcNo",   "N° timecode",     cell(2, 2), true);  picker("tcNo", 3, 2)
-
-  local opts = form:Append("UILayoutGrid")
-  opts.Columns, opts.Rows = 4, 1
-  opts.Anchors = cell(0, 3, 3)
-  local function edit2(key, prompt, col)
-    local e = opts:Append("LineEdit")
-    e.Anchors = cell(col, 0)
-    e.Content = tostring(v[key] or "")
-    opt(e, { Prompt = prompt .. " : ", Padding = "5,5",
-             Margin = { left = 2, right = 2, top = 2, bottom = 2 },
-             VkPluginName = "TextInputNumOnly", MaxTextLength = 5, Filter = "0123456789" })
-    w.fields[key] = e
+  label(main, cell(0, 5), "Réglages :", { TextColor = "Global.Text", Font = UI.fontButton })
+  local h2 = grid(main, cell(0, 6), 4, 1)
+  for i, t in ipairs({ "BPM", "Extras (0 à 10)", "Cues de song", "Créer le timecode" }) do
+    label(h2, cell(i - 1, 0), t)
   end
-  edit2("bpm",    "BPM",           0)
-  edit2("extras", "Extras (0-10)", 1)
-  edit2("cues",   "Cues de song",  2)
+  local settings = grid(main, cell(0, 7), 4, 1)
+  w.fields.bpm    = field(settings, cell(0, 0), v.bpm, true)
+  w.fields.extras = field(settings, cell(1, 0), v.extras, true)
+  w.fields.cues   = field(settings, cell(2, 0), v.cues, true)
+  w.tcBtn = button(settings, cell(3, 0), "", "tc_toggle")
+  opt(w.tcBtn, { Font = UI.fontValue })
 
-  local tc = opts:Append("CheckBox")
-  tc.Anchors = cell(3, 0)
-  tc.Text = "Creer le timecode"
-  tc.State = v.tcOn and 1 or 0
-  tc.PluginComponent = myHandle
-  tc.Clicked = "SC_Toggle"
-  w.tcBox = tc
+  label(main, cell(0, 9), "Exec main " .. CFG.execMain .. "  -  extras " .. CFG.execExtraFrom .. " à "
+        .. (CFG.execExtraFrom + CFG.maxExtras - 1) .. "  -  pages communes " .. CFG.commonPages
+        .. "  -  Speed Master " .. CFG.speedMaster,
+        { TextColor = "Global.Disabled", Font = UI.fontSmall, TextalignmentH = "Left", Padding = "10,0" })
 
-  w.recap = addText(base, cell(0, 3), "")
+  -- Droite : ce qui sera créé, puis les alertes
+  local rc = grid(body, cell(2, 0), 1, 3)
+  fixRow(rc, 1, 40)
+  rc[1][2].SizePolicy = "Stretch"
+  fixRow(rc, 3, 110)
+  label(rc, cell(0, 0), "Ce qui sera créé :", { TextColor = "Global.Text", Font = UI.fontButton })
+  w.recap = label(rc, cell(0, 1), "", { TextalignmentH = "Left", TextalignmentV = "Top",
+                                       TextColor = "Global.Text", Padding = "12,8" })
+  w.alert = label(rc, cell(0, 2), "", { TextalignmentH = "Left", TextalignmentV = "Top", Padding = "12,8" })
 
-  local btns = base:Append("UILayoutGrid")
-  btns.Columns, btns.Rows = 2, 1
-  btns.Anchors = cell(0, 4)
-  w.createBtn = addButton(btns, cell(0, 0), "Creer la song", "SC_Action", "create")
-  addButton(btns, cell(1, 0), "Annuler", "SC_Action", "cancel")
+  -- Barre de boutons
+  local ft = grid(base, cell(0, 2), 4, 1)
+  fixCol(ft, 1, UI.modesW)
+  label(ft, cell(0, 0), "")
+  w.createBtn = button(ft, cell(1, 0), "Créer la song", "create", "ok")
+  button(ft, cell(2, 0), "Valeurs par défaut", "defaults", "undo")
+  button(ft, cell(3, 0), "Annuler", "cancel", "cancel")
+
+  -- Coin de redimensionnement (bas droite)
+  pcall(function()
+    if ClassExists and not ClassExists("ResizeCorner") then return end
+    local rcorner = base:Append("ResizeCorner")
+    rcorner.Anchors = cell(0, 2)
+    opt(rcorner, { AlignmentH = "Right", AlignmentV = "Bottom" })
+  end)
+
+  setTcButton(w)
   return w
 end
 
@@ -831,26 +906,60 @@ local function runSetupWindow(w)
   local armed, finished, lastSig, tick = false, false, nil, 0
   local appAsked = false   -- la liste des apparences ne s'ouvre qu'une fois
 
+  local function setCreateText(text)
+    w.createBtn.Text = text
+  end
+
   local function refresh()
-    local input = readFields(w.fields, w.tcBox)
+    local input = readFields(w)
     local err, busy = validate(input)
+    w.maName.Text = (input.name ~= "") and ("Nom dans MA : " .. input.name) or ""
+    w.recap.Text = recapLines(input)
+    -- cases déjà occupées en orange
+    local busyField = {
+      page = exists("Pages", input.page or -1),
+      macro = exists("Macros", input.macro or -1),
+      tcNo = input.tcOn and exists("Timecodes", input.tcNo or -1),
+      seq = false,
+    }
+    if input.seq then
+      for s = input.seq, input.seq + (input.extras or 0) do
+        if exists("Sequences", s) then busyField.seq = true end
+      end
+    end
+    for k, b in pairs(busyField) do
+      quiet(w.fields[k], "TextColor", b and "Global.WarningText" or "Global.Text")
+    end
     if err then
-      w.recap.Text = "/!\\ " .. err
+      setAlert(w, err, "Global.ErrorText")
     else
-      w.recap.Text = recapText(input, busy)
+      local t, color = {}, "Global.SuccessText"
+      if #busy > 0 then
+        t[#t + 1] = "Déjà occupé, sera écrasé : " .. table.concat(busy, ", ") .. "."
+        color = "Global.WarningText"
+      end
+      local miss = missingAppearances(input)
+      if #miss > 0 then
+        local names = {}
+        for _, r in ipairs(miss) do names[#names + 1] = appName(r.key) end
+        t[#t + 1] = "Apparence absente du show : " .. table.concat(names, ", ")
+                 .. ". Une liste s'ouvrira pour en choisir une."
+        color = "Global.WarningText"
+      end
+      setAlert(w, (#t > 0) and table.concat(t, "\n") or "Prêt.", color)
     end
     return input, err, busy
   end
 
   while IsObjectValid(w.base) do
-    -- rafraîchit le récapitulatif quand un champ change
+    -- rafraîchit le récap quand un champ change
     tick = tick + 1
     if not finished and (ui.dirty or tick % 4 == 0) then
-      local sig = signature(w.fields, w.tcBox)
+      local sig = signature(w)
       if ui.dirty or sig ~= lastSig then
         lastSig, ui.dirty = sig, false
         refresh()
-        if armed then armed = false; w.createBtn.Text = "Creer la song" end
+        if armed then armed = false; setCreateText("Créer la song") end
       end
     end
 
@@ -858,9 +967,21 @@ local function runSetupWindow(w)
     ui.action = nil
     if a == "cancel" then
       break
-    elseif a and PICK_FIELDS[a] then
+    elseif a == "tc_toggle" and not finished then
+      w.tcOn = not w.tcOn
+      setTcButton(w)
+      ui.dirty = true
+    elseif a == "defaults" and not finished then
+      local d = defaultValues()
+      for _, k in ipairs(FIELD_ORDER) do
+        if k ~= "name" then w.fields[k].Content = tostring(d[k]) end
+      end
+      w.tcOn = true
+      setTcButton(w)
+      ui.dirty = true
+    elseif a and PICK_FIELDS[a] and not finished then
       local p = PICK_FIELDS[a]
-      local input = readFields(w.fields, w.tcBox)
+      local input = readFields(w)
       local block = (p.field == "seq") and (1 + (input.extras or 0)) or 1
       local n = pickFromPool(p.pool, p.title, input[p.field], block, w.pickBtn[p.field])
       if n and IsObjectValid(w.base) then
@@ -876,24 +997,25 @@ local function runSetupWindow(w)
         input, err, busy = refresh()
       end
       if err then
-        w.msg.Text = "/!\\ " .. err
+        setAlert(w, err, "Global.ErrorText")
       elseif #busy > 0 and not armed then
         armed = true
-        w.msg.Text = "/!\\ Deja occupe : " .. table.concat(busy, ", ")
-                  .. ". Appuie encore pour ecraser."
-        w.createBtn.Text = "Ecraser et creer"
+        setAlert(w, "Déjà occupé : " .. table.concat(busy, ", ") .. ".\nAppuie encore pour écraser.",
+                 "Global.WarningText")
+        setCreateText("Écraser et créer")
       else
         local ok, res = pcall(create, input)
         if not ok then
-          w.msg.Text = "Erreur pendant la creation : " .. tostring(res)
+          setAlert(w, "Erreur pendant la création : " .. tostring(res), "Global.ErrorText")
         elseif #res > 0 then
-          w.msg.Text = 'Song "' .. input.name .. '" creee, avec avertissements (voir ci-dessous).'
+          setAlert(w, 'Song « ' .. input.name .. ' » créée, avec avertissements (ci-dessus).',
+                   "Global.WarningText")
           w.recap.Text = "- " .. table.concat(res, "\n- ")
         else
-          w.msg.Text = 'Song "' .. input.name .. '" creee.'
+          setAlert(w, 'Song « ' .. input.name .. ' » créée.', "Global.SuccessText")
         end
         finished = true
-        w.createBtn.Text = "Fermer"
+        setCreateText("Fermer")
         w.createBtn.SignalValue = "cancel"
       end
     end

@@ -1,4 +1,4 @@
-# Plugin Song Creator v0.3.4 (grandMA3 2.3.2.0)
+# Plugin Song Creator v0.4.0 (grandMA3 2.3.2.0)
 
 Plugin grandMA3 qui remplace la macro « FULL SONG CREATOR » : une fenêtre de setup,
 puis la création complète d'une song (page, séquences, cues, timecode, executors,
@@ -17,19 +17,30 @@ importé **vide** (System Monitor : « Could not load ... as content is empty »
 rien. Un « Export Plugin » depuis un poste où il est déjà vide n'écrit que le `.xml`.
 
 ## La fenêtre
-- Une seule fenêtre, toujours sur **l'écran 1**.
+Disposition reprise de la fenêtre MA « Search and Modify » (maquette v0.4).
+- Une seule fenêtre, toujours sur **l'écran 1**, taille de départ 1040 x 580 (réduite si l'écran
+  est plus petit). Lignes de hauteur fixe, texte plus grand.
 - **Barre de titre** : on la fait glisser pour déplacer la fenêtre ; **croix** en haut à droite
-  pour fermer (ou Échap).
-- **Coin de redimensionnement** en bas à droite ; taille de départ relative à l'écran.
-- Champs : nom, page, macro de rappel, séquence main, n° de timecode, BPM, nombre
-  d'extras (0-10), nombre de cues de song, case « Créer le timecode ».
-- Bouton **« ... »** à côté de Page, Macro, Séquence et Timecode : ouvre la fenêtre de
-  sélection native de MA (« Select ... », avec filtre clavier) ancrée sur le bouton.
-  Elle liste les objets existants (`12 'Nom'`) puis des numéros libres. Pour la séquence,
-  les numéros libres proposés ont la place pour la main et toutes les extras.
-- **Récapitulatif en direct** sous le formulaire, avec les emplacements déjà occupés.
-- **Créer la song** ; si quelque chose est déjà occupé, un deuxième appui (« Écraser et
-  créer ») est demandé. Le résultat s'affiche dans la fenêtre.
+  pour fermer (ou Échap). **Coin de redimensionnement** en bas à droite.
+- **À gauche, « Mode : »** : Créer (en jaune). Renommer, Dupliquer et Supprimer sont grisés,
+  ils viendront plus tard.
+- **Au centre** :
+  - nom de la song, avec en dessous le nom tel qu'il sera écrit dans MA (`Nuit_Blanche`) ;
+  - **Emplacements** : Page, Séquence main, Macro de rappel, Timecode. On tape le numéro ou on
+    appuie sur la **flèche ▾** à côté : la fenêtre de sélection native de MA (« Select ... »,
+    avec filtre clavier) s'ouvre sur le bouton. Elle liste les objets existants (`12 'Nom'`) puis
+    des numéros libres. Pour la séquence, les numéros libres ont la place pour la main et toutes
+    les extras. Une case dont le numéro est déjà occupé s'écrit en orange ;
+  - **Réglages** : BPM, Extras (0 à 10), Cues de song, Créer le timecode (bouton Oui / Non) ;
+  - rappel des réglages fixes : Exec main 216, extras 121 à 130, pages communes, Speed Master 3.1.
+- **À droite, « Ce qui sera créé : »** : le récap en direct, puis les alertes (rouge : erreur,
+  orange : déjà occupé ou apparence absente, vert : prêt).
+- **En bas** :
+  - **Créer la song** : si quelque chose est déjà occupé, un deuxième appui (« Écraser et créer »)
+    est demandé. Le résultat s'affiche dans la fenêtre et le bouton devient « Fermer » ;
+  - **Valeurs par défaut** : remet tout sauf le nom (premiers numéros libres, 120 BPM, 4 extras,
+    20 cues, timecode Oui) ;
+  - **Annuler**.
 - Si la fenêtre sur mesure ne peut pas s'afficher sur une version, le plugin repasse sur
   les boîtes de dialogue MA standard.
 
@@ -42,7 +53,7 @@ rien. Un « Export Plugin » depuis un poste où il est déjà vide n'écrit que
   Couleurs : LAVENDER sur 0.6, 0.7 et Off Timecode, Black sur Black Out.
 
 Si une apparence (GREEN, BLUE, LAVENDER, Black) n'existe pas dans le show, le récap le signale et,
-à l'appui sur « Creer la song », la liste des apparences du show s'ouvre pour en choisir une autre.
+à l'appui sur « Créer la song », la liste des apparences du show s'ouvre pour en choisir une autre.
 Le choix est gardé dans le show (variables globales `SongCreator_App_...`) : supprime la variable
 pour revenir à l'apparence par défaut.
 - Timecode créé et nommé ; commandes `Select Timecode "Nom"`, `Go+ Timecode "Nom"`,
@@ -65,5 +76,6 @@ Sur onPC, si les raccourcis clavier sont actifs, les touches tapées dans la fen
 raccourcis. Coupe-les avec F10 (ou ShCuts) le temps de remplir le setup.
 
 ## À vérifier sur console
-- Les commandes des cues TC et les lignes de la macro de rappel (posées via Lua).
+- L'aspect de la fenêtre v0.4 : polices, couleurs, icônes des boutons, modes grisés. Une propriété
+  refusée par MA est ignorée et notée « propriete ignoree » dans le System Monitor.
 - Le programmer doit être vide : les `Store Cue` enregistrent son contenu.

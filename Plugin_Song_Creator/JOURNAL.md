@@ -34,6 +34,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.3.2 | test console du 11/10 : la commande des cues TC est écrite sur la part 0 de la cue (la cue refusait « Command »), chaque valeur posée en Lua est relue, propriétés listées dans le System Monitor si ça échoue |
 | 0.3.3 | une couleur par cue et LAVENDER sur 0.5 : fausse piste, retirée en 0.3.4 (il manquait juste l'apparence LAVENDER dans le show de test) |
 | 0.3.4 | retour à la ligne de couleur d'origine ; si une apparence manque dans le show, la liste native des apparences s'ouvre à la création pour en choisir une, et le choix est gardé dans une variable globale du show (`SongCreator_App_main`, `_extras`, `_tc`, `_bo`) |
+| 0.4.0 | nouvelle fenêtre d'après la maquette v0.4 (modèle « Search and Modify ») : modes à gauche (Créer ; Renommer, Dupliquer, Supprimer grisés), emplacements avec flèche ▾ vers la sélection native, réglages, bouton Oui / Non pour le timecode, récap « Ce qui sera créé » et alertes en couleur à droite, cases occupées en orange (avec le nom de l'objet), boutons Créer / Valeurs par défaut / Annuler ; lignes de hauteur fixe et polices plus grandes |
 
 ## Leçons apprises
 
@@ -71,6 +72,8 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
   MA ne les coupe tout seul que dans ses propres menus et fenêtres.
 - **Fenêtre trop grande** : une zone « Stretch » partagée en lignes égales donne des cases énormes avec un
   texte petit. Les fenêtres MA ont des lignes de hauteur fixe. Modèle choisi par Jo : « Search and Modify ».
+  Maquette v0.4 : `docs/Song_Creator_maquette_v0.4.html` (artifact https://claude.ai/artifact/YEKLN6ZJCbJx1G6jpW5vLQ),
+  codée en v0.4.0.
 
 ## Ressources
 
@@ -89,9 +92,9 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 ## Reste à faire
 
-- Vérifier sur console la v0.3.4 : liste des apparences quand une apparence manque.
+- Tester sur console l'aspect de la v0.4.0 (polices, couleurs, icônes, modes grisés) et ajuster.
+- Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
-- Refaire l'affichage façon « Search and Modify » une fois les fonctions validées.
 - Question de Jo (11/10) : le plugin apporte-t-il plus que la macro ? Piste : gérer les songs existantes
   (liste, renommer, supprimer, dupliquer, modèle, link Reaper).
 - Plus tard : séquence modèle à copier, renommer / supprimer une song, link Reaper.
