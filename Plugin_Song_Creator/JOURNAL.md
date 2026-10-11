@@ -80,6 +80,10 @@ polices, icônes et couleurs (BakaCowpoke, CC0). À consulter avant de deviner u
 de propriété. Elles confirment que `LineEdit`, `ResizeCorner`, la police `Medium20` et l'icône
 `object_plugin1` existent, et que `MessageBox` n'a pas d'option pour choisir l'écran.
 
+Lien ajouté le 11/10/2026 (non copié, pas de licence) : [grandma3.bambinito.net/reference](https://grandma3.bambinito.net/reference/),
+référence non officielle générée sur la console pour les versions 2.0 à 2.3 (fonctions Lua, enums, arbre des
+données). C'est la seule des trois qui couvre la 2.3 : à consulter en premier.
+
 ## Reste à faire
 
 - Vérifier sur console la v0.3.4 : liste des apparences quand une apparence manque.
