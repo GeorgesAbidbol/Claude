@@ -1,10 +1,13 @@
-# Plugin Song Creator v0.4.0 (grandMA3 2.3.2.0)
+# Plugin Song Creator v0.4.1 (grandMA3 2.3.2.0)
 
 Plugin grandMA3 qui remplace la macro « FULL SONG CREATOR » : une fenêtre de setup,
 puis la création complète d'une song (page, séquences, cues, timecode, executors,
 macro de rappel).
 
 ## Installation
+Pour mettre à jour : vérifier la version dans la barre de titre après l'import. Si elle n'a pas
+changé, l'ancien plugin est encore chargé : le supprimer du pool et réimporter.
+
 1. Copier **les deux fichiers** `SongCreator.xml` **et** `SongCreator.lua` sur la clé USB
    dans `grandMA3/gma3_library/datapools/plugins/`.
 2. Sur la console : supprimer l'ancien Song Creator du pool Plugins, puis case vide,
@@ -18,7 +21,7 @@ rien. Un « Export Plugin » depuis un poste où il est déjà vide n'écrit que
 
 ## La fenêtre
 Disposition reprise de la fenêtre MA « Search and Modify » (maquette v0.4).
-- Une seule fenêtre, toujours sur **l'écran 1**, taille de départ 1040 x 580 (réduite si l'écran
+- Une seule fenêtre, toujours sur **l'écran 1**, taille de départ 1400 x 600 (réduite si l'écran
   est plus petit). Lignes de hauteur fixe, texte plus grand.
 - **Barre de titre** : on la fait glisser pour déplacer la fenêtre ; **croix** en haut à droite
   pour fermer (ou Échap). **Coin de redimensionnement** en bas à droite.

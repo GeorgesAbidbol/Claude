@@ -35,6 +35,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.3.3 | une couleur par cue et LAVENDER sur 0.5 : fausse piste, retirée en 0.3.4 (il manquait juste l'apparence LAVENDER dans le show de test) |
 | 0.3.4 | retour à la ligne de couleur d'origine ; si une apparence manque dans le show, la liste native des apparences s'ouvre à la création pour en choisir une, et le choix est gardé dans une variable globale du show (`SongCreator_App_main`, `_extras`, `_tc`, `_bo`) |
 | 0.4.0 | nouvelle fenêtre d'après la maquette v0.4 (modèle « Search and Modify ») : modes à gauche (Créer ; Renommer, Dupliquer, Supprimer grisés), emplacements avec flèche ▾ vers la sélection native, réglages, bouton Oui / Non pour le timecode, récap « Ce qui sera créé » et alertes en couleur à droite, cases occupées en orange (avec le nom de l'objet), boutons Créer / Valeurs par défaut / Annuler ; lignes de hauteur fixe et polices plus grandes |
+| 0.4.1 | retours console de la 0.4.0 : fenêtre de départ agrandie (1400 x 600), cases des emplacements plus larges (les numéros étaient masqués), icônes des boutons placées à gauche du texte ou retirées si MA ne sait pas les décaler, plus d'icône sur le bouton Oui / Non, lignes du récap raccourcies |
 
 ## Leçons apprises
 
@@ -74,6 +75,10 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
   texte petit. Les fenêtres MA ont des lignes de hauteur fixe. Modèle choisi par Jo : « Search and Modify ».
   Maquette v0.4 : `docs/Song_Creator_maquette_v0.4.html` (artifact https://claude.ai/artifact/YEKLN6ZJCbJx1G6jpW5vLQ),
   codée en v0.4.0.
+- **Test console de la v0.4.0 (11/10)** : fenêtre trop petite à 1040 x 580 ; dans un `LineEdit` étroit l'icône
+  clavier mange la place et le numéro disparaît ; l'`Icon` d'un `Button` se centre **sur** le texte ; un texte
+  trop long pour sa case est coupé. Polices `Regular18/24`, couleurs `Global.*`, boutons grisés : OK.
+  Après une mise à jour, regarder d'abord la version dans la barre de titre (Jo a d'abord relancé la 0.3.4).
 
 ## Ressources
 
@@ -92,7 +97,7 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 ## Reste à faire
 
-- Tester sur console l'aspect de la v0.4.0 (polices, couleurs, icônes, modes grisés) et ajuster.
+- Tester sur console l'aspect de la v0.4.1 (taille, icônes à gauche, numéros visibles) et ajuster.
 - Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
 - Question de Jo (11/10) : le plugin apporte-t-il plus que la macro ? Piste : gérer les songs existantes

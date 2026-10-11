@@ -10,7 +10,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.4.0"
+local VERSION = "0.4.1"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -660,10 +660,10 @@ end
 --  Lignes de hauteur fixe : la fenêtre ne s'étire plus, le texte est plus grand.
 -- ---------------------------------------------------------------------------
 local UI = {
-  W = 1040, H = 580,             -- taille de départ (réduite si l'écran est plus petit)
-  title = 50, foot = 64,         -- barre de titre, barre de boutons
-  modesW = 150, recapW = 340,    -- colonne des modes, panneau de droite
-  row = 56, head = 30, sect = 34, pick = 54,
+  W = 1400, H = 600,             -- taille de départ (réduite si l'écran est plus petit)
+  title = 50, foot = 70,         -- barre de titre, barre de boutons
+  modesW = 160, recapW = 440,    -- colonne des modes, panneau de droite
+  row = 60, head = 32, sect = 40, pick = 52,
   fontValue = "Regular24", fontLabel = "Regular18", fontButton = "Regular20",
   fontSmall = "Regular14",
 }
@@ -707,12 +707,30 @@ local function field(parent, anchors, value, numeric, prompt)
   return e
 end
 
+-- Icône à gauche du texte. Si MA ne sait pas la décaler, pas d'icône :
+-- centrée, elle se pose sur le texte (vu sur console en 0.4.0).
+local function iconLeft(b, icon)
+  local ok = pcall(function()
+    b.Icon = icon
+    b.IconAlignmentH = "Left"
+  end)
+  local got
+  if ok then pcall(function() got = tostring(b.IconAlignmentH) end) end
+  if got ~= "Left" then
+    pcall(function() b.Icon = "" end)
+    Printf("[SongCreator] icone '" .. icon .. "' retiree (IconAlignmentH refuse)")
+    return false
+  end
+  opt(b, { Padding = "20,0" })
+  return true
+end
+
 local function button(parent, anchors, text, value, icon)
   local b = parent:Append("Button")
   b.Anchors = anchors
   b.Text = text
   opt(b, { Font = UI.fontButton, HasHover = "Yes", Margin = { left = 1, right = 1, top = 1, bottom = 1 } })
-  if icon then opt(b, { Icon = icon }) end
+  if icon then iconLeft(b, icon) end
   if value then
     b.PluginComponent = myHandle
     b.Clicked = "SC_Action"
@@ -737,28 +755,28 @@ local function signature(w)
   return table.concat(t, "|")
 end
 
--- Panneau de droite : ce qui sera créé
+-- Panneau de droite : ce qui sera créé (lignes courtes pour tenir dans le panneau)
 local function recapLines(v)
   local n = v.extras or 0
   local name = (v.name ~= "" and v.name) or "?"
   local function q(x) return x and tostring(x) or "?" end
   local c = v.cues or 0
   local t = {
-    "Page : " .. q(v.page) .. " « " .. name .. " »",
-    "Séquence : " .. q(v.seq) .. " -> Exec " .. CFG.execMain .. " (" .. appName("main") .. ")",
+    "Page " .. q(v.page) .. " « " .. name .. " »",
+    "Séquence " .. q(v.seq) .. " -> Exec " .. CFG.execMain .. " (" .. appName("main") .. ")",
   }
   if n > 0 and v.seq then
-    t[#t + 1] = "Extras : " .. (v.seq + 1) .. " à " .. (v.seq + n) .. " -> Exec "
+    t[#t + 1] = "Extras " .. (v.seq + 1) .. " à " .. (v.seq + n) .. " -> Exec "
              .. CFG.execExtraFrom .. " à " .. (CFG.execExtraFrom + n - 1) .. " (" .. appName("extras") .. ")"
   else
     t[#t + 1] = "Extras : aucun"
   end
-  t[#t + 1] = "Notes : « " .. name .. " » sur " .. (n + 1) .. " séquence" .. (n > 0 and "s" or "")
-  t[#t + 1] = "Cues : 0.5 Mise, 0.6 Select TC, 0.7 Go TC,"
-  t[#t + 1] = "      1 à " .. q(v.cues) .. ", " .. (c + 1) .. " Black Out, " .. (c + 2) .. " Off TC"
-  t[#t + 1] = "Timecode : " .. (v.tcOn and (q(v.tcNo) .. " « " .. name .. " »") or "non")
-  t[#t + 1] = "Macro : " .. q(v.macro) .. " « " .. name .. " », 7 lignes"
-  t[#t + 1] = "Speed Master : " .. CFG.speedMaster .. " à " .. q(v.bpm) .. " BPM"
+  t[#t + 1] = "Notes sur " .. (n + 1) .. " séquence" .. (n > 0 and "s" or "")
+  t[#t + 1] = "Cues 0.5 Mise, 0.6 Select TC, 0.7 Go TC"
+  t[#t + 1] = "Cues 1 à " .. q(v.cues) .. ", " .. (c + 1) .. " Black Out, " .. (c + 2) .. " Off TC"
+  t[#t + 1] = "Timecode " .. (v.tcOn and (q(v.tcNo) .. " « " .. name .. " »") or ": non")
+  t[#t + 1] = "Macro " .. q(v.macro) .. " « " .. name .. " » (7 lignes)"
+  t[#t + 1] = "Speed Master " .. CFG.speedMaster .. " à " .. q(v.bpm) .. " BPM"
   return table.concat(t, "\n")
 end
 
@@ -769,7 +787,6 @@ end
 
 local function setTcButton(w)
   w.tcBtn.Text = w.tcOn and "Oui" or "Non"
-  quiet(w.tcBtn, "Icon", w.tcOn and "CheckboxChecked" or "CheckboxUnchecked")
   quiet(w.tcBtn, "TextColor", w.tcOn and "Global.Selected" or "Global.Text")
   quiet(w.fields.tcNo, "Enabled", w.tcOn and "Yes" or "No")
 end
@@ -788,7 +805,7 @@ local function buildSetupWindow(v)
   fixRow(base, 1, UI.title)
   base[1][2].SizePolicy = "Stretch"
   fixRow(base, 3, UI.foot)
-  opt(base, { MinSize = "800,480", MaxSize = math.floor(dispW) .. "," .. math.floor(dispH),
+  opt(base, { MinSize = "900,520", MaxSize = math.floor(dispW) .. "," .. math.floor(dispH),
               AlignmentH = "Center", AlignmentV = "Center", AutoClose = "No", CloseOnEscape = "Yes" })
   local w = { overlay = overlay, base = base, fields = {}, pickBtn = {}, tcOn = v.tcOn }
 
