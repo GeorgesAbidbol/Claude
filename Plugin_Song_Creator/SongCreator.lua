@@ -10,7 +10,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.3.1"
+local VERSION = "0.3.2"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -461,24 +461,61 @@ local function findCueByName(seqNo, cueName)
   return nil
 end
 
+-- Nom exact d'une propriété de l'objet : nil si l'objet ne sait pas lister
+-- ses propriétés, false si elle n'existe pas.
+local function propName(obj, wanted)
+  local okC, n = pcall(function() return obj:PropertyCount() end)
+  if not okC or type(n) ~= "number" then return nil end
+  for i = 0, n - 1 do
+    local okN, pn = pcall(function() return obj:PropertyName(i) end)
+    if okN and type(pn) == "string" and pn:lower() == wanted:lower() then return pn end
+  end
+  return false
+end
+
+local function propList(obj)
+  local okC, n = pcall(function() return obj:PropertyCount() end)
+  if not okC or type(n) ~= "number" then return "?" end
+  local t = {}
+  for i = 0, n - 1 do
+    local okN, pn = pcall(function() return obj:PropertyName(i) end)
+    if okN and pn then t[#t + 1] = tostring(pn) end
+  end
+  return table.concat(t, ", ")
+end
+
+-- Écrit une propriété puis la relit. Sur 2.3.2, un Set refusé n'est pas
+-- toujours une erreur Lua (MA l'écrit seulement en rouge) : seule la
+-- relecture prouve que la valeur est posée.
+local function setChecked(obj, wanted, value)
+  if not obj then return false end
+  local name = propName(obj, wanted)
+  if name == false then return false end
+  name = name or wanted
+  if not pcall(function() obj:Set(name, value) end) then return false end
+  local okG, got = pcall(function() return obj:Get(name) end)
+  return okG and got ~= nil and trim(tostring(got)) == value
+end
+
 -- Écrit la commande d'une cue via l'API Lua (pas de souci de guillemets
--- imbriqués). Selon la version, la commande vit sur la cue ou sur sa part 0.
+-- imbriqués). Sur 2.3.2 la cue refuse « Command » (test console du 11/10) :
+-- on essaie d'abord sa part 0, puis la cue.
 local function setCueCommand(seqNo, cueName, command, warnings)
   local cue = findCueByName(seqNo, cueName)
   if not cue then
     warnings[#warnings + 1] = "Cue \"" .. cueName .. "\" introuvable"
     return
   end
-  local ok = pcall(function() cue:Set("Command", command) end)
-  if not ok then
-    local part = cue[1]
-    ok = part and pcall(function() part:Set("Command", command) end)
-  end
-  if ok then
+  local okP, part = pcall(function() return cue[1] end)
+  if not okP then part = nil end
+  if setChecked(part, "Command", command) or setChecked(cue, "Command", command) then
     log[#log + 1] = "(lua) " .. cueName .. " : Command = " .. command
-  else
-    warnings[#warnings + 1] = "Commande non posée sur \"" .. cueName .. "\" : " .. command
+    return
   end
+  warnings[#warnings + 1] = "Commande non posée sur \"" .. cueName .. "\" : " .. command
+  -- pour le diagnostic : les propriétés que MA propose sur la cue et la part
+  Printf("[SongCreator] proprietes cue " .. cueName .. " : " .. propList(cue))
+  if part then Printf("[SongCreator] proprietes part : " .. propList(part)) end
 end
 
 local function buildSongMacro(v, warnings)
@@ -507,9 +544,10 @@ local function buildSongMacro(v, warnings)
   for i, text in ipairs(lines) do
     local line = macro[i]
     if not line then pcall(function() line = macro:Append() end) end
-    if line then
-      line:Set("Command", text)
+    if line and setChecked(line, "Command", text) then
       log[#log + 1] = "(lua) Macro " .. v.macro .. "." .. i .. " = " .. text
+    elseif line then
+      warnings[#warnings + 1] = "Ligne " .. i .. " de la macro sans commande : " .. text
     else
       warnings[#warnings + 1] = "Ligne " .. i .. " de la macro non créée"
     end
