@@ -80,9 +80,12 @@ polices, icônes et couleurs (BakaCowpoke, CC0). À consulter avant de deviner u
 de propriété. Elles confirment que `LineEdit`, `ResizeCorner`, la police `Medium20` et l'icône
 `object_plugin1` existent, et que `MessageBox` n'a pas d'option pour choisir l'écran.
 
-Lien ajouté le 11/10/2026 (non copié, pas de licence) : [grandma3.bambinito.net/reference](https://grandma3.bambinito.net/reference/),
-référence non officielle générée sur la console pour les versions 2.0 à 2.3 (fonctions Lua, enums, arbre des
-données). C'est la seule des trois qui couvre la 2.3 : à consulter en premier.
+Ajouté le 11/10/2026 : `Ressources/GrandMA3-Reference-patopesto/`, copie de la référence de
+[grandma3.bambinito.net](https://grandma3.bambinito.net/reference/) (dépôt patopesto, AGPL v3). C'est un dump de la
+vraie API **2.3** : à consulter en premier (`API_2.3.md`, `ENUMS_2.3.md`). Documentation seulement, pas de copie de code.
+Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left_icon, number, right_icon}`,
+`MessageBox` accepte un `display` en 2.3, `Cmd()` renvoie « Ok », `LineEdit` a un signal `TextChanged`, et les icônes
+`ok`, `cancel`, `undo`, `triangle_down`, `object_sequence`, `object_macro`, `object_timecode`, `object_pages` existent.
 
 ## Reste à faire
 
