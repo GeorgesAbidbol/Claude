@@ -10,7 +10,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.4.1"
+local VERSION = "0.5.0"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -655,23 +655,49 @@ local function create(v)
 end
 
 -- ---------------------------------------------------------------------------
---  Fenêtre de setup v0.4 (écran 1), sur le modèle de « Search and Modify » :
---  modes à gauche, réglages au centre, récap à droite, boutons en bas.
---  Lignes de hauteur fixe : la fenêtre ne s'étire plus, le texte est plus grand.
+--  Fenêtre de setup v0.5 (écran 1). Recettes reprises de GUI REPLACE V15 de Jo,
+--  validé sur console : DialogFrame pour le cadre et le fond, marges autour de
+--  chaque élément, libellés sur fond transparent à gauche des champs, bouton
+--  principal dans la couleur « Please » de MA. Icônes à gauche du texte
+--  (IconAlignmentH, vérifié sur console en 0.4.1).
 -- ---------------------------------------------------------------------------
 local UI = {
-  W = 1400, H = 600,             -- taille de départ (réduite si l'écran est plus petit)
-  title = 50, foot = 70,         -- barre de titre, barre de boutons
-  modesW = 160, recapW = 440,    -- colonne des modes, panneau de droite
-  row = 60, head = 32, sect = 40, pick = 52,
+  W = 1300, H = 760,             -- taille de départ (au plus 95 % de l'écran)
+  title = 60, foot = 80,         -- barre de titre, barre de boutons
+  modesW = 180, recapW = 430,    -- colonne des modes, panneau de droite
+  row = 54, sect = 38, gap = 14, -- ligne de champ, titre de section, espace
+  labelW = 190, label2W = 170, numW = 120, pickW = 56,
   fontValue = "Regular24", fontLabel = "Regular18", fontButton = "Regular20",
-  fontSmall = "Regular14",
+  fontSection = "Regular20", fontSmall = "Regular14",
 }
+local PANEL = 10   -- marge autour des panneaux
+
+-- marges autour d'un champ ou d'un bouton : c'est ce qui sépare les cases
+local function itemMargin() return { left = 6, right = 0, top = 5, bottom = 5 } end
+local function pad(l, r, t, b) return { left = l, right = r, top = t, bottom = b } end
+
+-- Couleurs du thème MA (comme GUI REPLACE V15), noms en secours
+local COL = { transparent = "Global.Transparent", back = "Button.Background",
+              please = "Button.BackgroundPlease" }
+local function loadColors()
+  pcall(function()
+    local g = Root().ColorTheme.ColorGroups
+    COL.transparent = g.Global.Transparent or COL.transparent
+    COL.back = g.Button.Background or COL.back
+    COL.please = g.Button.BackgroundPlease or COL.please
+  end)
+end
 
 local ui = {}
 signalTable.SC_Action = function(caller) ui.action = caller.SignalValue end
 
 local FIELD_ORDER = { "name", "page", "seq", "macro", "tcNo", "bpm", "extras", "cues" }
+local SLOTS = {
+  { key = "page",  pool = "Pages",     label = "Page" },
+  { key = "seq",   pool = "Sequences", label = "Séquence main" },
+  { key = "macro", pool = "Macros",    label = "Macro de rappel" },
+  { key = "tcNo",  pool = "Timecodes", label = "Timecode" },
+}
 
 -- Réglage répété à chaque rafraîchissement : pas de message s'il est refusé.
 local function quiet(obj, k, v) pcall(function() obj[k] = v end) end
@@ -685,58 +711,66 @@ end
 local function fixRow(g, i, size) g[1][i].SizePolicy = "Fixed"; g[1][i].Size = tostring(size) end
 local function fixCol(g, i, size) g[2][i].SizePolicy = "Fixed"; g[2][i].Size = tostring(size) end
 
+-- Texte posé sur le fond de la fenêtre (pas de case grise)
 local function label(parent, anchors, text, props)
   local t = parent:Append("UIObject")
   t.Anchors = anchors
   t.Text = text
-  opt(t, { Font = UI.fontLabel, HasHover = "No", TextalignmentH = "Center", TextColor = "Global.LabelText" })
+  opt(t, { Font = UI.fontLabel, HasHover = "No", TextalignmentH = "Left",
+           Padding = pad(6, 4, 0, 0), TextColor = "Global.Text", BackColor = COL.transparent })
   if props then opt(t, props) end
   return t
 end
 
-local function field(parent, anchors, value, numeric, prompt)
+local function section(parent, anchors, text)
+  return label(parent, anchors, text, { Font = UI.fontSection, TextColor = "Global.LabelText",
+                                        TextalignmentV = "Bottom", Padding = pad(6, 4, 0, 6) })
+end
+
+local function field(parent, anchors, value, numeric)
   local e = parent:Append("LineEdit")
   e.Anchors = anchors
   e.Content = tostring(value or "")
-  opt(e, { Font = UI.fontValue, TextalignmentH = numeric and "Center" or "Left",
-           Padding = "8,4", Margin = { left = 1, right = 1, top = 1, bottom = 1 },
+  opt(e, { Font = UI.fontValue, TextalignmentH = "Left", Margin = itemMargin(),
            VkPluginName = numeric and "TextInputNumOnly" or "TextInput",
            MaxTextLength = numeric and 5 or 60 })
-  if prompt then opt(e, { Prompt = prompt }) end
   if numeric then opt(e, { Filter = "0123456789" }) end
   return e
-end
-
--- Icône à gauche du texte. Si MA ne sait pas la décaler, pas d'icône :
--- centrée, elle se pose sur le texte (vu sur console en 0.4.0).
-local function iconLeft(b, icon)
-  local ok = pcall(function()
-    b.Icon = icon
-    b.IconAlignmentH = "Left"
-  end)
-  local got
-  if ok then pcall(function() got = tostring(b.IconAlignmentH) end) end
-  if got ~= "Left" then
-    pcall(function() b.Icon = "" end)
-    Printf("[SongCreator] icone '" .. icon .. "' retiree (IconAlignmentH refuse)")
-    return false
-  end
-  opt(b, { Padding = "20,0" })
-  return true
 end
 
 local function button(parent, anchors, text, value, icon)
   local b = parent:Append("Button")
   b.Anchors = anchors
   b.Text = text
-  opt(b, { Font = UI.fontButton, HasHover = "Yes", Margin = { left = 1, right = 1, top = 1, bottom = 1 } })
-  if icon then iconLeft(b, icon) end
+  opt(b, { Font = UI.fontButton, HasHover = "Yes", Margin = itemMargin() })
+  if icon then
+    -- icône à gauche du texte ; si MA ne sait pas la décaler, pas d'icône
+    -- (centrée, elle se poserait sur le texte, vu en 0.4.0)
+    local ok = pcall(function() b.Icon = icon; b.IconAlignmentH = "Left" end)
+    local got
+    if ok then pcall(function() got = tostring(b.IconAlignmentH) end) end
+    if got ~= "Left" then
+      pcall(function() b.Icon = "" end)
+      Printf("[SongCreator] icone '" .. icon .. "' retiree (IconAlignmentH refuse)")
+    else
+      opt(b, { Padding = pad(20, 10, 0, 0) })
+    end
+  end
   if value then
     b.PluginComponent = myHandle
     b.Clicked = "SC_Action"
     b.SignalValue = value
   end
   return b
+end
+
+-- Ligne « libellé | contrôles » ; widths : largeur fixe de chaque colonne, false = étirée
+local function line(parent, r, widths)
+  local g = grid(parent, cell(0, r), #widths, 1)
+  for i, wd in ipairs(widths) do
+    if wd then fixCol(g, i, wd) else g[2][i].SizePolicy = "Stretch" end
+  end
+  return g
 end
 
 local function readFields(w)
@@ -780,6 +814,30 @@ local function recapLines(v)
   return table.concat(t, "\n")
 end
 
+-- État d'un emplacement, affiché à droite du numéro : libre ou occupé (par quoi)
+local function slotStatus(poolName, no, block)
+  if not no then return "numéro invalide", "Global.ErrorText" end
+  local p = pool(poolName)
+  local first, count = nil, 0
+  for n = no, no + block - 1 do
+    local o = p and p[n]
+    if o then
+      count = count + 1
+      if not first then
+        local nm = ""
+        pcall(function() nm = tostring(o.name or "") end)
+        first = (nm ~= "") and ("« " .. nm .. " »") or ("n° " .. n)
+      end
+    end
+  end
+  if count == 0 then
+    if block > 1 then return "libre (" .. no .. " à " .. (no + block - 1) .. ")", "Global.LabelText" end
+    return "libre", "Global.LabelText"
+  end
+  if count == 1 then return "occupé : " .. first, "Global.WarningText" end
+  return count .. " sur " .. block .. " occupés", "Global.WarningText"
+end
+
 local function setAlert(w, text, color)
   w.alert.Text = text
   quiet(w.alert, "TextColor", color)
@@ -788,114 +846,144 @@ end
 local function setTcButton(w)
   w.tcBtn.Text = w.tcOn and "Oui" or "Non"
   quiet(w.tcBtn, "TextColor", w.tcOn and "Global.Selected" or "Global.Text")
-  quiet(w.fields.tcNo, "Enabled", w.tcOn and "Yes" or "No")
+  local en = w.tcOn and "Yes" or "No"
+  quiet(w.fields.tcNo, "Enabled", en)
+  quiet(w.status.tcNo, "Enabled", en)
+  quiet(w.pickBtn.tcNo, "Enabled", en)
 end
 
 -- Construit la fenêtre ; une erreur ici fait passer à la boîte MA de secours.
 local function buildSetupWindow(v)
+  loadColors()
   local display, dispW, dispH = pickDisplay()
   local overlay = display.ScreenOverlay
-  local W = math.min(UI.W, math.floor(dispW - 40))
-  local H = math.min(UI.H, math.floor(dispH - 40))
+  local maxW, maxH = math.floor(dispW * 0.95), math.floor(dispH * 0.95)
+  local W, H = math.min(UI.W, maxW), math.min(UI.H, maxH)
 
   local base = overlay:Append("BaseInput")
   base.Name = "SongCreatorSetup"
   base.W, base.H = W, H
-  base.Columns, base.Rows = 1, 3
+  base.Columns, base.Rows = 1, 2
   fixRow(base, 1, UI.title)
   base[1][2].SizePolicy = "Stretch"
-  fixRow(base, 3, UI.foot)
-  opt(base, { MinSize = "900,520", MaxSize = math.floor(dispW) .. "," .. math.floor(dispH),
+  opt(base, { MinSize = math.min(1000, W) .. "," .. math.min(640, H), MaxSize = maxW .. "," .. maxH,
               AlignmentH = "Center", AlignmentV = "Center", AutoClose = "No", CloseOnEscape = "Yes" })
-  local w = { overlay = overlay, base = base, fields = {}, pickBtn = {}, tcOn = v.tcOn }
+  local w = { overlay = overlay, base = base, fields = {}, status = {}, pickBtn = {}, tcOn = v.tcOn }
 
   -- Barre de titre : on la fait glisser pour déplacer la fenêtre, croix à droite
   local tb = base:Append("TitleBar")
-  tb.Columns, tb.Rows = 2, 1
+  tb.Columns, tb.Rows = 3, 1
   tb.Anchors = cell(0, 0)
-  fixCol(tb, 2, UI.title)
+  fixCol(tb, 2, 110)
+  fixCol(tb, 3, 50)
   opt(tb, { Texture = "corner2" })
   local tbt = tb:Append("TitleButton")
-  tbt.Text = "Song Creator   v" .. VERSION
+  tbt.Text = "Song Creator"
   tbt.Anchors = cell(0, 0)
   opt(tbt, { Texture = "corner1", Icon = "object_plugin1", Font = UI.fontButton })
+  label(tb, cell(1, 0), "v" .. VERSION, { TextalignmentH = "Right", Font = UI.fontSmall,
+                                          TextColor = "Global.LabelText", Padding = pad(4, 12, 0, 0) })
   local close = tb:Append("CloseButton")
-  close.Anchors = cell(1, 0)
+  close.Anchors = cell(2, 0)
   opt(close, { Texture = "corner2" })
 
-  local body = grid(base, cell(0, 1), 3, 1)
+  -- Cadre de dialogue MA : fond et contour de la fenêtre
+  local frameClass = "DialogFrame"
+  if ClassExists and not ClassExists(frameClass) then frameClass = "UILayoutGrid" end
+  local frame = base:Append(frameClass)
+  opt(frame, { H = "100%", W = "100%" })
+  frame.Columns, frame.Rows = 1, 2
+  frame.Anchors = cell(0, 1)
+  frame[1][1].SizePolicy = "Stretch"
+  fixRow(frame, 2, UI.foot)
+
+  local body = grid(frame, cell(0, 0), 3, 1)
   fixCol(body, 1, UI.modesW)
+  body[2][2].SizePolicy = "Stretch"
   fixCol(body, 3, UI.recapW)
 
   -- Colonne des modes (les autres modes viendront plus tard)
   local modes = grid(body, cell(0, 0), 1, 6)
-  fixRow(modes, 1, 36)
-  for r = 2, 5 do fixRow(modes, r, 60) end
-  label(modes, cell(0, 0), "Mode :", { TextalignmentH = "Left", Padding = "10,0" })
+  opt(modes, { Margin = pad(PANEL, 2, PANEL, PANEL) })
+  fixRow(modes, 1, UI.sect)
+  for r = 2, 5 do fixRow(modes, r, UI.row) end
+  modes[1][6].SizePolicy = "Stretch"
+  section(modes, cell(0, 0), "Mode")
   local bCreate = button(modes, cell(0, 1), "Créer")
-  opt(bCreate, { TextColor = "Global.Selected", TextalignmentH = "Left", Padding = "14,0" })
+  opt(bCreate, { TextColor = "Global.Selected", TextalignmentH = "Left", Padding = pad(14, 4, 0, 0) })
   for i, t in ipairs({ "Renommer", "Dupliquer", "Supprimer" }) do
     local b = button(modes, cell(0, i + 1), t)
     opt(b, { Enabled = "No", TextColor = "Global.Disabled", TextalignmentH = "Left",
-             Padding = "14,0", Font = UI.fontLabel })
+             Padding = pad(14, 4, 0, 0), Font = UI.fontLabel })
   end
 
-  -- Centre : nom, emplacements, réglages
-  local main = grid(body, cell(1, 0), 1, 10)
-  local sizes = { UI.row, 30, UI.sect, UI.head, UI.row, UI.sect, UI.head, UI.row, false, 30 }
-  for i = 1, 10 do
+  -- Centre : la song, les emplacements, les réglages
+  local main = grid(body, cell(1, 0), 1, 15)
+  opt(main, { Margin = pad(8, 8, PANEL, PANEL) })
+  local sizes = { UI.sect, UI.row, 30, UI.gap, UI.sect, UI.row, UI.row, UI.row, UI.row,
+                  UI.gap, UI.sect, UI.row, UI.row, false, 30 }
+  for i = 1, #sizes do
     if sizes[i] then fixRow(main, i, sizes[i]) else main[1][i].SizePolicy = "Stretch" end
   end
-  w.fields.name = field(main, cell(0, 0), v.name, false, "Nom de la song : ")
-  w.maName = label(main, cell(0, 1), "", { TextalignmentH = "Left", Padding = "10,0", Font = UI.fontSmall })
 
-  label(main, cell(0, 2), "Emplacements :", { TextColor = "Global.Text", Font = UI.fontButton })
-  local h1 = grid(main, cell(0, 3), 4, 1)
-  for i, t in ipairs({ "Page", "Séquence main", "Macro de rappel", "Timecode" }) do
-    label(h1, cell(i - 1, 0), t)
-  end
-  local places = grid(main, cell(0, 4), 8, 1)
-  for c = 2, 8, 2 do fixCol(places, c, UI.pick) end
-  for i, k in ipairs({ "page", "seq", "macro", "tcNo" }) do
-    w.fields[k] = field(places, cell((i - 1) * 2, 0), v[k], true)
-    local b = button(places, cell((i - 1) * 2 + 1, 0), "", "pick_" .. k)
+  section(main, cell(0, 0), "Song")
+  local ln = line(main, 1, { UI.labelW, false })
+  label(ln, cell(0, 0), "Nom de la song")
+  w.fields.name = field(ln, cell(1, 0), v.name, false)
+  local lm = line(main, 2, { UI.labelW, false })
+  w.maName = label(lm, cell(1, 0), "", { Font = UI.fontSmall, TextColor = "Global.LabelText" })
+
+  section(main, cell(0, 4), "Emplacements")
+  for i, s in ipairs(SLOTS) do
+    local g = line(main, 4 + i, { UI.labelW, UI.numW, false, UI.pickW })
+    label(g, cell(0, 0), s.label)
+    w.fields[s.key] = field(g, cell(1, 0), v[s.key], true)
+    -- l'état (libre / occupé) ouvre aussi la liste
+    local st = button(g, cell(2, 0), "", "pick_" .. s.key)
+    opt(st, { TextalignmentH = "Left", Font = UI.fontLabel, Padding = pad(12, 6, 0, 0) })
+    w.status[s.key] = st
+    local b = button(g, cell(3, 0), "", "pick_" .. s.key)
     -- flèche de liste ; « ... » si l'icône n'existe pas sur cette version
     if not pcall(function() b.Icon = "triangle_down" end) then b.Text = "..." end
-    w.pickBtn[k] = b
+    w.pickBtn[s.key] = b
   end
 
-  label(main, cell(0, 5), "Réglages :", { TextColor = "Global.Text", Font = UI.fontButton })
-  local h2 = grid(main, cell(0, 6), 4, 1)
-  for i, t in ipairs({ "BPM", "Extras (0 à 10)", "Cues de song", "Créer le timecode" }) do
-    label(h2, cell(i - 1, 0), t)
-  end
-  local settings = grid(main, cell(0, 7), 4, 1)
-  w.fields.bpm    = field(settings, cell(0, 0), v.bpm, true)
-  w.fields.extras = field(settings, cell(1, 0), v.extras, true)
-  w.fields.cues   = field(settings, cell(2, 0), v.cues, true)
-  w.tcBtn = button(settings, cell(3, 0), "", "tc_toggle")
+  section(main, cell(0, 10), "Réglages")
+  local r1 = line(main, 11, { UI.labelW, UI.numW, 24, UI.label2W, UI.numW, false })
+  label(r1, cell(0, 0), "BPM")
+  w.fields.bpm = field(r1, cell(1, 0), v.bpm, true)
+  label(r1, cell(3, 0), "Extras (0 à 10)")
+  w.fields.extras = field(r1, cell(4, 0), v.extras, true)
+  local r2 = line(main, 12, { UI.labelW, UI.numW, 24, UI.label2W, UI.numW, false })
+  label(r2, cell(0, 0), "Cues de song")
+  w.fields.cues = field(r2, cell(1, 0), v.cues, true)
+  label(r2, cell(3, 0), "Créer le timecode")
+  w.tcBtn = button(r2, cell(4, 0), "", "tc_toggle")
   opt(w.tcBtn, { Font = UI.fontValue })
 
-  label(main, cell(0, 9), "Exec main " .. CFG.execMain .. "  -  extras " .. CFG.execExtraFrom .. " à "
-        .. (CFG.execExtraFrom + CFG.maxExtras - 1) .. "  -  pages communes " .. CFG.commonPages
-        .. "  -  Speed Master " .. CFG.speedMaster,
-        { TextColor = "Global.Disabled", Font = UI.fontSmall, TextalignmentH = "Left", Padding = "10,0" })
+  label(main, cell(0, 14), "Exec main " .. CFG.execMain .. "   -   extras " .. CFG.execExtraFrom .. " à "
+        .. (CFG.execExtraFrom + CFG.maxExtras - 1) .. "   -   pages communes " .. CFG.commonPages
+        .. "   -   Speed Master " .. CFG.speedMaster,
+        { TextColor = "Global.Disabled", Font = UI.fontSmall })
 
   -- Droite : ce qui sera créé, puis les alertes
-  local rc = grid(body, cell(2, 0), 1, 3)
-  fixRow(rc, 1, 40)
+  local rc = grid(body, cell(2, 0), 1, 4)
+  opt(rc, { Margin = pad(4, PANEL, PANEL, PANEL) })
+  fixRow(rc, 1, UI.sect)
   rc[1][2].SizePolicy = "Stretch"
-  fixRow(rc, 3, 110)
-  label(rc, cell(0, 0), "Ce qui sera créé :", { TextColor = "Global.Text", Font = UI.fontButton })
-  w.recap = label(rc, cell(0, 1), "", { TextalignmentH = "Left", TextalignmentV = "Top",
-                                       TextColor = "Global.Text", Padding = "12,8" })
-  w.alert = label(rc, cell(0, 2), "", { TextalignmentH = "Left", TextalignmentV = "Top", Padding = "12,8" })
+  fixRow(rc, 3, UI.gap)
+  fixRow(rc, 4, 110)
+  section(rc, cell(0, 0), "Ce qui sera créé")
+  w.recap = label(rc, cell(0, 1), "", { TextalignmentV = "Top", BackColor = COL.back,
+                                        Padding = pad(14, 10, 12, 10) })
+  w.alert = label(rc, cell(0, 3), "", { TextalignmentV = "Top", Padding = pad(6, 6, 4, 4) })
 
-  -- Barre de boutons
-  local ft = grid(base, cell(0, 2), 4, 1)
-  fixCol(ft, 1, UI.modesW)
-  label(ft, cell(0, 0), "")
+  -- Barre de boutons : Créer en couleur « Please », comme le Replace de V15
+  local ft = grid(frame, cell(0, 1), 4, 1)
+  opt(ft, { Margin = pad(PANEL - 6, PANEL, 6, PANEL) })
+  fixCol(ft, 1, UI.modesW - PANEL)
   w.createBtn = button(ft, cell(1, 0), "Créer la song", "create", "ok")
+  opt(w.createBtn, { BackColor = COL.please })
   button(ft, cell(2, 0), "Valeurs par défaut", "defaults", "undo")
   button(ft, cell(3, 0), "Annuler", "cancel", "cancel")
 
@@ -903,7 +991,7 @@ local function buildSetupWindow(v)
   pcall(function()
     if ClassExists and not ClassExists("ResizeCorner") then return end
     local rcorner = base:Append("ResizeCorner")
-    rcorner.Anchors = cell(0, 2)
+    rcorner.Anchors = cell(0, 1)
     opt(rcorner, { AlignmentH = "Right", AlignmentV = "Bottom" })
   end)
 
@@ -932,20 +1020,18 @@ local function runSetupWindow(w)
     local err, busy = validate(input)
     w.maName.Text = (input.name ~= "") and ("Nom dans MA : " .. input.name) or ""
     w.recap.Text = recapLines(input)
-    -- cases déjà occupées en orange
-    local busyField = {
-      page = exists("Pages", input.page or -1),
-      macro = exists("Macros", input.macro or -1),
-      tcNo = input.tcOn and exists("Timecodes", input.tcNo or -1),
-      seq = false,
-    }
-    if input.seq then
-      for s = input.seq, input.seq + (input.extras or 0) do
-        if exists("Sequences", s) then busyField.seq = true end
+    -- état de chaque emplacement à droite du numéro, numéro en orange si occupé
+    for _, s in ipairs(SLOTS) do
+      local txt, color
+      if s.key == "tcNo" and not input.tcOn then
+        txt, color = "pas de timecode", "Global.Disabled"
+      else
+        local block = (s.key == "seq") and (1 + (input.extras or 0)) or 1
+        txt, color = slotStatus(s.pool, input[s.key], block)
       end
-    end
-    for k, b in pairs(busyField) do
-      quiet(w.fields[k], "TextColor", b and "Global.WarningText" or "Global.Text")
+      w.status[s.key].Text = txt
+      quiet(w.status[s.key], "TextColor", color)
+      quiet(w.fields[s.key], "TextColor", (color == "Global.WarningText") and color or "Global.Text")
     end
     if err then
       setAlert(w, err, "Global.ErrorText")

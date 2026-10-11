@@ -36,6 +36,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.3.4 | retour à la ligne de couleur d'origine ; si une apparence manque dans le show, la liste native des apparences s'ouvre à la création pour en choisir une, et le choix est gardé dans une variable globale du show (`SongCreator_App_main`, `_extras`, `_tc`, `_bo`) |
 | 0.4.0 | nouvelle fenêtre d'après la maquette v0.4 (modèle « Search and Modify ») : modes à gauche (Créer ; Renommer, Dupliquer, Supprimer grisés), emplacements avec flèche ▾ vers la sélection native, réglages, bouton Oui / Non pour le timecode, récap « Ce qui sera créé » et alertes en couleur à droite, cases occupées en orange (avec le nom de l'objet), boutons Créer / Valeurs par défaut / Annuler ; lignes de hauteur fixe et polices plus grandes |
 | 0.4.1 | retours console de la 0.4.0 : fenêtre de départ agrandie (1400 x 600), cases des emplacements plus larges (les numéros étaient masqués), icônes des boutons placées à gauche du texte ou retirées si MA ne sait pas les décaler, plus d'icône sur le bouton Oui / Non, lignes du récap raccourcies |
+| 0.5.0 | fenêtre refaite avec les recettes de GUI REPLACE V15 de Jo (validé sur console) : `DialogFrame` pour le cadre et le fond, marges autour de chaque case, libellés sans fond à gauche des champs, titres de section, une ligne par emplacement avec son état (libre / occupé : « nom ») qui ouvre la liste, bouton Créer dans la couleur « Please » de MA, version à droite de la barre de titre, fenêtre 1300 x 760 (au plus 95 % de l'écran) |
 
 ## Leçons apprises
 
@@ -79,6 +80,15 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
   clavier mange la place et le numéro disparaît ; l'`Icon` d'un `Button` se centre **sur** le texte ; un texte
   trop long pour sa case est coupé. Polices `Regular18/24`, couleurs `Global.*`, boutons grisés : OK.
   Après une mise à jour, regarder d'abord la version dans la barre de titre (Jo a d'abord relancé la 0.3.4).
+- **Test console de la v0.4.1 (11/10)** : `IconAlignmentH = "Left"` marche sur un `Button` (icône à gauche du texte).
+  Numéros lisibles. Retours de Jo : pas de contour de fenêtre, cases trop serrées (on ne voit pas la séparation),
+  trop de gris. Cause : pas de `DialogFrame`, marges de 1 px, et un `UIObject` a un fond gris par défaut.
+- **Recettes de GUI REPLACE V15** (plugin Preset Replacer de Jo, validé sur console 2.3, copie dans
+  `reference/jo_preset_replacer/` des fichiers projet) : `BaseInput` à 2 lignes (titre 60, puis `DialogFrame`
+  avec `H = "100%"`, `W = "100%"`) ; marges des panneaux 10 ; marges des champs et boutons 3 à 5 ; libellé
+  à gauche dans une colonne fixe ; `BackColor = Root().ColorTheme.ColorGroups.Global.Transparent` pour les
+  textes, `Button.Background` pour les listes, `Button.BackgroundPlease` pour les boutons principaux ;
+  taille au plus 95 % de l'écran ; version dans la barre de titre ; boutons de choix qui affichent la valeur.
 
 ## Ressources
 
@@ -97,7 +107,7 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 ## Reste à faire
 
-- Tester sur console l'aspect de la v0.4.1 (taille, icônes à gauche, numéros visibles) et ajuster.
+- Tester sur console l'aspect de la v0.5.0 (cadre, marges, fonds, couleur du bouton Créer).
 - Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
 - Question de Jo (11/10) : le plugin apporte-t-il plus que la macro ? Piste : gérer les songs existantes
