@@ -32,6 +32,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.3.0 | fenêtre unique sur mesure (écran 1, déplaçable, redimensionnable, croix), récap en direct, boutons « ... » vers la sélection native MA, boîtes MA en secours |
 | 0.3.1 | relecture avec les docs : retour des commandes vérifié (refus listés), création dans une seule action Oops, lignes de macro créées par `Store Macro N.i` puis remplies en Lua, `ClassExists` avant le coin de redimensionnement, version MA écrite au démarrage |
 | 0.3.2 | test console du 11/10 : la commande des cues TC est écrite sur la part 0 de la cue (la cue refusait « Command »), chaque valeur posée en Lua est relue, propriétés listées dans le System Monitor si ça échoue |
+| 0.3.3 | test console de la v0.3.2 : tout marche sauf les couleurs de cues. Une commande `Assign Appearance` par cue au lieu de la liste « 0.6 + 0.7 + 22 », et LAVENDER aussi sur 0.5 Mise |
 
 ## Leçons apprises
 
@@ -61,6 +62,9 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
   « LUA API Syntax error, wrong parameter #2 » : la cue n'a pas de propriété Command en 2.3.2, elle est
   probablement sur la part 0. Un `Set` refusé ne lève pas toujours d'erreur Lua : il faut relire avec `Get`.
   Les lignes de macro (`MacroLine:Set("Command")`) passent sans erreur.
+  Avec la v0.3.2 (commande écrite sur la part 0), les cues TC et la macro de rappel marchent.
+- **Liste de cues** : `Assign Appearance "X" At Cue 0.6 + 0.7 + 22` répond OK mais ne colore pas toutes
+  les cues. Une commande par cue est plus sûre.
 - **Raccourcis clavier onPC** (F10 ou ShCuts) : ils captent les touches tapées dans les champs du plugin.
   MA ne les coupe tout seul que dans ses propres menus et fenêtres.
 - **Fenêtre trop grande** : une zone « Stretch » partagée en lignes égales donne des cases énormes avec un
@@ -76,7 +80,7 @@ de propriété. Elles confirment que `LineEdit`, `ResizeCorner`, la police `Medi
 
 ## Reste à faire
 
-- Vérifier sur console la v0.3.2 : commandes des cues 0.6 / 0.7 / Off TC, lignes de la macro de rappel.
+- Vérifier sur console la v0.3.3 : couleurs des cues 0.5, 0.6, 0.7 et Off TC.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
 - Refaire l'affichage façon « Search and Modify » une fois les fonctions validées.
 - Question de Jo (11/10) : le plugin apporte-t-il plus que la macro ? Piste : gérer les songs existantes

@@ -10,7 +10,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.3.2"
+local VERSION = "0.3.3"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -26,7 +26,7 @@ local CFG = {
   confExtras    = "EXTRAS",
   appMain       = "GREEN",
   appExtras     = "BLUE",
-  appTcCues     = "LAVENDER",
+  appTcCues     = "LAVENDER",     -- cues 0.5, 0.6, 0.7 et Off Timecode
   appBlackOut   = "Black",
 
   defaults = { bpm = 120, extras = 4, cues = 20 },
@@ -593,7 +593,11 @@ local function createBody(v, warnings)
   C("Store Cue 1 Thru " .. v.cues .. " /NoConfirmation")
   C("Store Cue " .. cueBO .. ' "Black Out" /NoConfirmation')
   C("Store Cue " .. cueOffTC .. ' "Off Timecode" Property "TrigType" "Follow" /NoConfirmation')
-  C('Assign Appearance "' .. CFG.appTcCues .. '" At Cue 0.6 + 0.7 + ' .. cueOffTC)
+  -- Une commande par cue : sur console (11/10), la liste « 0.6 + 0.7 + 22 »
+  -- répondait OK mais ne colorait pas toutes les cues.
+  for _, c in ipairs({ "0.5", "0.6", "0.7", tostring(cueOffTC) }) do
+    C('Assign Appearance "' .. CFG.appTcCues .. '" At Cue ' .. c)
+  end
   C('Assign Appearance "' .. CFG.appBlackOut .. '" At Cue ' .. cueBO)
 
   -- 5. Timecode + commandes des cues TC (par le nom, entre guillemets)
