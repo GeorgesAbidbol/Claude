@@ -32,7 +32,8 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.3.0 | fenêtre unique sur mesure (écran 1, déplaçable, redimensionnable, croix), récap en direct, boutons « ... » vers la sélection native MA, boîtes MA en secours |
 | 0.3.1 | relecture avec les docs : retour des commandes vérifié (refus listés), création dans une seule action Oops, lignes de macro créées par `Store Macro N.i` puis remplies en Lua, `ClassExists` avant le coin de redimensionnement, version MA écrite au démarrage |
 | 0.3.2 | test console du 11/10 : la commande des cues TC est écrite sur la part 0 de la cue (la cue refusait « Command »), chaque valeur posée en Lua est relue, propriétés listées dans le System Monitor si ça échoue |
-| 0.3.3 | test console de la v0.3.2 : tout marche sauf les couleurs de cues. Une commande `Assign Appearance` par cue au lieu de la liste « 0.6 + 0.7 + 22 », et LAVENDER aussi sur 0.5 Mise |
+| 0.3.3 | une couleur par cue et LAVENDER sur 0.5 : fausse piste, retirée en 0.3.4 (il manquait juste l'apparence LAVENDER dans le show de test) |
+| 0.3.4 | retour à la ligne de couleur d'origine ; si une apparence manque dans le show, la liste native des apparences s'ouvre à la création pour en choisir une, et le choix est gardé dans une variable globale du show (`SongCreator_App_main`, `_extras`, `_tc`, `_bo`) |
 
 ## Leçons apprises
 
@@ -63,8 +64,9 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
   probablement sur la part 0. Un `Set` refusé ne lève pas toujours d'erreur Lua : il faut relire avec `Get`.
   Les lignes de macro (`MacroLine:Set("Command")`) passent sans erreur.
   Avec la v0.3.2 (commande écrite sur la part 0), les cues TC et la macro de rappel marchent.
-- **Liste de cues** : `Assign Appearance "X" At Cue 0.6 + 0.7 + 22` répond OK mais ne colore pas toutes
-  les cues. Une commande par cue est plus sûre.
+- **Apparence absente** : `Assign Appearance "X"` répond OK même si l'apparence X n'existe pas dans le show,
+  et rien n'est coloré. Le plugin vérifie donc les apparences dans `ShowData().Appearances` avant de créer.
+  La liste `Cue 0.6 + 0.7 + 22` marche très bien.
 - **Raccourcis clavier onPC** (F10 ou ShCuts) : ils captent les touches tapées dans les champs du plugin.
   MA ne les coupe tout seul que dans ses propres menus et fenêtres.
 - **Fenêtre trop grande** : une zone « Stretch » partagée en lignes égales donne des cases énormes avec un
@@ -80,7 +82,7 @@ de propriété. Elles confirment que `LineEdit`, `ResizeCorner`, la police `Medi
 
 ## Reste à faire
 
-- Vérifier sur console la v0.3.3 : couleurs des cues 0.5, 0.6, 0.7 et Off TC.
+- Vérifier sur console la v0.3.4 : liste des apparences quand une apparence manque.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
 - Refaire l'affichage façon « Search and Modify » une fois les fonctions validées.
 - Question de Jo (11/10) : le plugin apporte-t-il plus que la macro ? Piste : gérer les songs existantes

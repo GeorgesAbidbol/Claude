@@ -10,7 +10,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.3.3"
+local VERSION = "0.3.4"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -26,7 +26,7 @@ local CFG = {
   confExtras    = "EXTRAS",
   appMain       = "GREEN",
   appExtras     = "BLUE",
-  appTcCues     = "LAVENDER",     -- cues 0.5, 0.6, 0.7 et Off Timecode
+  appTcCues     = "LAVENDER",
   appBlackOut   = "Black",
 
   defaults = { bpm = 120, extras = 4, cues = 20 },
@@ -415,6 +415,86 @@ local function validate(v)
   return nil, busy
 end
 
+-- Apparences de la song. MA répond OK à « Assign Appearance » même quand
+-- l'apparence n'existe pas dans le show (test console du 11/10) : on vérifie
+-- avant, et on fait choisir une apparence du show à la place. Le choix est
+-- gardé dans une variable globale du show (SongCreator_App_...).
+local APP_ROLES = {
+  { key = "main",   default = CFG.appMain,     label = "Executor main" },
+  { key = "extras", default = CFG.appExtras,   label = "Executors extras" },
+  { key = "tc",     default = CFG.appTcCues,   label = "Cues timecode" },
+  { key = "bo",     default = CFG.appBlackOut, label = "Cue Black Out" },
+}
+
+local function appVarName(key) return "SongCreator_App_" .. key end
+
+local function appName(key)
+  local okV, saved = pcall(function() return GetVar(GlobalVars(), appVarName(key)) end)
+  if okV and saved ~= nil and tostring(saved) ~= "" then return tostring(saved) end
+  for _, r in ipairs(APP_ROLES) do
+    if r.key == key then return r.default end
+  end
+end
+
+-- Noms des apparences du show, dans l'ordre du pool (nil si illisible)
+local function appearanceNames()
+  local okA, apps = pcall(function() return ShowData().Appearances end)
+  if not okA or not apps then return nil end
+  local okC, list = pcall(function() return apps:Children() end)
+  if not okC or type(list) ~= "table" then return nil end
+  local names = {}
+  for _, a in ipairs(list) do
+    if a.name and tostring(a.name) ~= "" then names[#names + 1] = tostring(a.name) end
+  end
+  return names
+end
+
+-- Rôles dont l'apparence n'existe pas dans le show
+local function missingAppearances(v)
+  local names = appearanceNames()
+  if not names then return {} end
+  local have = {}
+  for _, n in ipairs(names) do have[n:lower()] = true end
+  local miss = {}
+  for _, r in ipairs(APP_ROLES) do
+    if (r.key ~= "extras" or (v.extras or 0) > 0) and not have[appName(r.key):lower()] then
+      miss[#miss + 1] = r
+    end
+  end
+  return miss
+end
+
+-- Ouvre la liste native des apparences du show pour chaque apparence absente
+local function resolveAppearances(v, caller)
+  local miss = missingAppearances(v)
+  if #miss == 0 then return end
+  local names = appearanceNames() or {}
+  if #names == 0 then return end
+  for _, r in ipairs(miss) do
+    local args = {
+      title    = 'Select Appearance (' .. r.label .. ' : "' .. appName(r.key) .. '" absente)',
+      caller   = caller or (pickDisplay()),
+      items    = names,
+      add_args = { FilterSupport = "Yes" },
+    }
+    local ok, idx, value = pcall(PopupInput, args)
+    if not ok then
+      args.caller = (pickDisplay())
+      ok, idx, value = pcall(PopupInput, args)
+    end
+    local chosen
+    if ok and value and value ~= "" then
+      chosen = value
+    elseif ok and tonumber(idx) then
+      chosen = names[tonumber(idx) + 1]
+    end
+    if chosen then
+      pcall(function() SetVar(GlobalVars(), appVarName(r.key), chosen) end)
+      Printf("[SongCreator] apparence " .. r.label .. " -> " .. chosen)
+    end
+  end
+end
+
 local function recapText(v, busy)
   local lastExtra = v.seq + v.extras
   local t = {
@@ -434,6 +514,13 @@ local function recapText(v, busy)
   if busy and #busy > 0 then
     t[#t + 1] = ""
     t[#t + 1] = "/!\\ DEJA OCCUPE (sera ecrase) : " .. table.concat(busy, ", ")
+  end
+  local miss = missingAppearances(v)
+  if #miss > 0 then
+    local t2 = {}
+    for _, r in ipairs(miss) do t2[#t2 + 1] = appName(r.key) end
+    t[#t + 1] = "/!\\ Apparence absente du show : " .. table.concat(t2, ", ")
+             .. " (une liste s'ouvrira pour en choisir une)"
   end
   return table.concat(t, "\n")
 end
@@ -579,11 +666,11 @@ local function createBody(v, warnings)
       .. " At Executor " .. CFG.execExtraFrom .. " Thru " .. (CFG.execExtraFrom + v.extras - 1))
     C('Assign Configuration "' .. CFG.confExtras .. '" At Executor '
       .. CFG.execExtraFrom .. " Thru " .. (CFG.execExtraFrom + v.extras - 1))
-    C('Assign Appearance "' .. CFG.appExtras .. '" At Executor '
+    C('Assign Appearance "' .. appName("extras") .. '" At Executor '
       .. CFG.execExtraFrom .. " Thru " .. (CFG.execExtraFrom + v.extras - 1))
   end
   C('Assign Configuration "' .. CFG.confMain .. '" At Executor ' .. CFG.execMain)
-  C('Assign Appearance "' .. CFG.appMain .. '" At Executor ' .. CFG.execMain)
+  C('Assign Appearance "' .. appName("main") .. '" At Executor ' .. CFG.execMain)
 
   -- 4. Cues de la séquence main (mêmes commandes que la macro d'origine)
   C("Select Executor " .. CFG.execMain)
@@ -593,12 +680,8 @@ local function createBody(v, warnings)
   C("Store Cue 1 Thru " .. v.cues .. " /NoConfirmation")
   C("Store Cue " .. cueBO .. ' "Black Out" /NoConfirmation')
   C("Store Cue " .. cueOffTC .. ' "Off Timecode" Property "TrigType" "Follow" /NoConfirmation')
-  -- Une commande par cue : sur console (11/10), la liste « 0.6 + 0.7 + 22 »
-  -- répondait OK mais ne colorait pas toutes les cues.
-  for _, c in ipairs({ "0.5", "0.6", "0.7", tostring(cueOffTC) }) do
-    C('Assign Appearance "' .. CFG.appTcCues .. '" At Cue ' .. c)
-  end
-  C('Assign Appearance "' .. CFG.appBlackOut .. '" At Cue ' .. cueBO)
+  C('Assign Appearance "' .. appName("tc") .. '" At Cue 0.6 + 0.7 + ' .. cueOffTC)
+  C('Assign Appearance "' .. appName("bo") .. '" At Cue ' .. cueBO)
 
   -- 5. Timecode + commandes des cues TC (par le nom, entre guillemets)
   if v.tcOn then
@@ -625,6 +708,9 @@ local function create(v)
   undo = nil
   for _, e in ipairs(cmdErrors) do
     warnings[#warnings + 1] = "Commande refusee : " .. e
+  end
+  for _, r in ipairs(missingAppearances(v)) do
+    warnings[#warnings + 1] = r.label .. ' : apparence "' .. appName(r.key) .. '" absente du show, pas de couleur'
   end
   if not ok then error(err, 0) end
   return warnings
@@ -743,6 +829,7 @@ local PICK_FIELDS = {
 local function runSetupWindow(w)
   ui.action, ui.dirty = nil, true
   local armed, finished, lastSig, tick = false, false, nil, 0
+  local appAsked = false   -- la liste des apparences ne s'ouvre qu'une fois
 
   local function refresh()
     local input = readFields(w.fields, w.tcBox)
@@ -782,6 +869,12 @@ local function runSetupWindow(w)
       end
     elseif a == "create" then
       local input, err, busy = refresh()
+      if not err and not appAsked and #missingAppearances(input) > 0 then
+        appAsked = true
+        resolveAppearances(input, w.createBtn)
+        if not IsObjectValid(w.base) then break end
+        input, err, busy = refresh()
+      end
       if err then
         w.msg.Text = "/!\\ " .. err
       elseif #busy > 0 and not armed then
@@ -836,6 +929,7 @@ local function messageBoxFlow(v)
       local choice = confirm(input, busy)
       if choice == 0 then return end
       if choice == 1 then
+        resolveAppearances(input)
         local ok, res = pcall(create, input)
         local text
         if not ok then

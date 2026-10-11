@@ -1,4 +1,4 @@
-# Plugin Song Creator v0.3.3 (grandMA3 2.3.2.0)
+# Plugin Song Creator v0.3.4 (grandMA3 2.3.2.0)
 
 Plugin grandMA3 qui remplace la macro « FULL SONG CREATOR » : une fenêtre de setup,
 puis la création complète d'une song (page, séquences, cues, timecode, executors,
@@ -39,7 +39,12 @@ rien. Un « Export Plugin » depuis un poste où il est déjà vide n'écrit que
 - Séquence main + extras collées à la suite, notes au nom de la song.
 - Main sur l'Exec 216 (config MAIN SEQUENCE, GREEN), extras sur 121.. (config EXTRAS, BLUE).
 - Cues : 0.5 Mise, 0.6 Select Timecode, 0.7 Go Timecode, 1..N, N+1 Black Out, N+2 Off Timecode.
-  Couleurs : LAVENDER sur 0.5, 0.6, 0.7 et Off Timecode, Black sur Black Out.
+  Couleurs : LAVENDER sur 0.6, 0.7 et Off Timecode, Black sur Black Out.
+
+Si une apparence (GREEN, BLUE, LAVENDER, Black) n'existe pas dans le show, le récap le signale et,
+à l'appui sur « Creer la song », la liste des apparences du show s'ouvre pour en choisir une autre.
+Le choix est gardé dans le show (variables globales `SongCreator_App_...`) : supprime la variable
+pour revenir à l'apparence par défaut.
 - Timecode créé et nommé ; commandes `Select Timecode "Nom"`, `Go+ Timecode "Nom"`,
   `Off Timecode "Nom"` posées sur les cues TC.
 - Macro de rappel (7 lignes), `$currentSong` conservé tel quel.
