@@ -1,4 +1,4 @@
-# Plugin Song Creator v0.7.1 (grandMA3 2.3.2.0)
+# Plugin Song Creator v0.7.2 (grandMA3 2.3.2.0)
 
 Plugin grandMA3 qui remplace la macro « FULL SONG CREATOR » : une fenêtre de setup,
 puis la création complète d'une song (page, séquences, cues, timecode, executors,
@@ -22,24 +22,25 @@ rien. Un « Export Plugin » depuis un poste où il est déjà vide n'écrit que
 ## La fenêtre
 Disposition de la maquette v0.4 (modèle « Search and Modify »), avec les recettes graphiques du
 plugin GUI REPLACE V15 de Jo : cadre de dialogue MA, marges entre les cases, libellés sans fond.
-- Une seule fenêtre, toujours sur **l'écran 1**, taille de départ 1300 x 760 (au plus 95 % de l'écran).
+- Une seule fenêtre, toujours sur **l'écran 1**, taille de départ 1300 x 870 (au plus 95 % de l'écran).
 - **Barre de titre** : on la fait glisser pour déplacer la fenêtre ; version à droite ; **croix**
   pour fermer (ou Échap). **Coin de redimensionnement** en bas à droite.
 - **À gauche, « Mode »** : Créer, Renommer, Dupliquer, Supprimer (le mode en cours en jaune).
   Le centre, le récap de droite et le bouton principal changent avec le mode (voir plus bas).
 - **Au centre** :
   - **Song** : le nom, avec en dessous le nom tel qu'il sera écrit dans MA (`Nuit_Blanche`) ;
-  - **Emplacements** : une ligne par objet (Page, Séquence main, Macro de rappel, Timecode) avec
+  - **Emplacements** : une ligne par objet (Page, Séquence main, Macro de rappel, Timecode, Tag) avec
     le numéro, puis son état (« libre », ou « occupé : « Intro » » en orange), puis la flèche ▾.
     L'état ou la flèche affichent, **dans la fenêtre**, la liste « Select Page »,
-    « Select Sequence »... : tous les numéros du pool comme dans la fenêtre du pool, jusqu'à
+    « Select Sequence », « Select Tags »... : tous les numéros du pool comme dans la fenêtre du pool, jusqu'à
     30 numéros après le dernier objet, avec une **barre de défilement** à droite.
-    **Noir : libre. Gris : occupé** (ou la couleur de son apparence, pas l'image). Les quatre
+    **Noir : libre. Gris : occupé** (ou la couleur de son apparence, pas l'image). Les cinq
     pools marchent pareil : un clic sur une case libre ou occupée la met dans le champ et le
     setup revient ; « Annuler » en bas à droite revient sans rien changer. Pour la séquence, une
     case « pas la place » (la main et ses extras ne tiennent pas avant l'objet suivant) affiche
     un avertissement orange en haut de la liste, qui reste ouverte. L'état couvre tout le bloc ;
-  - **Réglages** : BPM, Extras (0 à 10), Cues de song, Créer le timecode (Oui / Non) ;
+  - **Réglages** : BPM, Extras (0 à 10), Cues de song, Créer le timecode (Oui / Non),
+    Poser le tag (Oui / Non : avec Non, la ligne Tag est grisée et rien n'est taggé) ;
   - rappel des réglages fixes : Exec main 216, extras 121 à 130, pages communes, Speed Master 3.1.
 - **À droite, « Ce qui sera créé »** : le récap en direct, une case par ligne, puis l'alerte en couleur (rouge :
   erreur, orange : déjà occupé ou apparence absente, vert : prêt).
@@ -49,7 +50,7 @@ plugin GUI REPLACE V15 de Jo : cadre de dialogue MA, marges entre les cases, lib
     le bouton devient « Fermer ». Changer un champ, le mode ou la song remet la fenêtre en saisie :
     on peut enchaîner plusieurs songs sans rouvrir le plugin ;
   - **Valeurs par défaut** : remet tout sauf le nom (premiers numéros libres, 120 BPM, 4 extras,
-    20 cues, timecode Oui) ;
+    20 cues, timecode Oui, tag Oui) ;
   - **Annuler**.
 - Si la fenêtre sur mesure ne peut pas s'afficher sur une version, le plugin repasse sur
   les boîtes de dialogue MA standard.
@@ -69,9 +70,11 @@ pour revenir à l'apparence par défaut.
 - Timecode créé et nommé ; commandes `Select Timecode "Nom"`, `Go+ Timecode "Nom"`,
   `Off Timecode "Nom"` posées sur les cues TC.
 - Macro de rappel (7 lignes), `$currentSong` conservé tel quel.
-- Depuis la 0.7.1 : **note au nom de la song** sur la page, les séquences, le timecode et la macro, et
-  **un tag au nom de la song** (pool Tags) posé sur ces mêmes objets, pour filtrer et pour d'autres
-  plugins. Commandes : `Store Tag "Nom"`, `Assign Tag "Nom" At Page 3`, `... At Sequence 101 Thru 105`...
+- Depuis la 0.7.1 : **note au nom de la song** sur la page, les séquences, le timecode et la macro.
+- Depuis la 0.7.2 : **un tag au nom de la song**, au numéro choisi dans la ligne Tag (pool Tags), posé
+  sur la page, les séquences, le timecode et la macro, pour filtrer et pour d'autres plugins.
+  Commandes : `Store Tag 5`, `Label Tag 5 "Nom"`, `Assign Tag 5 At Page 3`,
+  `Assign Tag 5 At Sequence 101 Thru 105`... Un tag déjà à ce numéro est écrasé (deuxième appui).
 
 ## Renommer, Dupliquer, Supprimer (0.7)
 Une song, c'est **une page et une séquence qui portent le même nom** (ce que font le plugin et
@@ -95,8 +98,13 @@ pools, dans la fenêtre). En dessous : la séquence main, les extras, le timecod
   song d'origine (piste, event vers une cue, executor) est ensuite rebranché sur la copie. Les
   pistes qui visent d'autres séquences restent telles quelles. Si un emplacement est occupé,
   deuxième appui « Écraser et dupliquer ».
-- **Tag (0.7.1)** : Renommer renomme le tag de la song (ou le crée pour une song plus ancienne) ;
-  Dupliquer retire le tag d'origine de la copie et lui pose le sien ; Supprimer supprime aussi le tag.
+- **Tag (0.7.2)** : le tag de la song est celui qui porte son nom. Renommer le renomme (une song
+  sans tag reste sans tag). Dupliquer a une ligne **Tag** dans les emplacements de la copie
+  (vide = pas de tag ; proposée si la song en a un) ; la copie perd le tag d'origine et reçoit le
+  sien. Supprimer supprime aussi le tag, **sauf** si des objets hors de la song le portent encore.
+- **Vérification par le tag (0.7.2)** : un extra est reconnu par sa note **ou** par le tag de la
+  song. Sous la ligne Song : « tag 5 (8 objets) ». Si des objets hors de la song portent le tag
+  (une séquence ailleurs...), l'alerte les liste : ils ne sont ni copiés ni supprimés.
 - **Supprimer** : le récap liste tout ce qui part (page, séquences, timecode, macro, tag). Bouton gris
   à texte rouge, deuxième appui « Confirmer la suppression ».
 
@@ -121,8 +129,11 @@ raccourcis. Coupe-les avec F10 (ou ShCuts) le temps de remplir le setup.
 - v0.7.0 / 0.7.1 : Renommer, Dupliquer (timecode compris : les pistes déclenchent bien les nouvelles
   séquences) et Supprimer validés sur console par Jo (12/10). La 0.7.1 ne demande plus l'adresse des
   objets internes du timecode (lignes rouges « Could not resolve object address » en 0.7.0) et ferme
-  la fenêtre sans vider l'écran 1. Les tags sont nouveaux en 0.7.1 : si MA refuse une commande de
-  tag, elle est listée en avertissement. Le System Monitor note pour le timecode copié :
+  la fenêtre sans vider l'écran 1. Les tags sont nouveaux (0.7.1 par nom, 0.7.2 par numéro) : si MA
+  refuse une commande de tag, elle est listée en avertissement. Le System Monitor note aussi une fois
+  comment MA donne les tags d'un objet (`tags lus sur ... : string « ... »`, ou `tags des objets
+  illisibles`) : une photo de cette ligne permet de fiabiliser la vérification par le tag.
+  Le System Monitor note pour le timecode copié :
   `TC n : x objets lus, y liens vers la song d'origine, z rebranches ... (Target par handle ...)`.
   Si des liens n'ont pas pu être rebranchés, ils sont listés avec la structure du timecode
   (`TC classe ...`) : une photo de ces lignes suffit pour corriger.

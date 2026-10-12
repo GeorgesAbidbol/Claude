@@ -11,7 +11,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.7.1"
+local VERSION = "0.7.2"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -73,13 +73,47 @@ local function toInt(s)
 end
 
 local function pool(name)
+  -- les tags ne sont plus dans DataPool (2.x) mais dans ShowData().Tags
+  if name == "Tags" then
+    local ok, t = pcall(function() return ShowData().Tags end)
+    return ok and t or nil
+  end
   local dp = DataPool()
   return dp and dp[name]
 end
 
-local function exists(poolName, no)
+-- Lit le pool : used[no] = nom, maxNo = plus grand numéro occupé.
+local function readPool(poolName)
   local p = pool(poolName)
-  return p ~= nil and p[no] ~= nil
+  local used, maxNo, objs = {}, 0, {}
+  if p then
+    local okK, kids = pcall(function() return p:Children() end)
+    for i, obj in ipairs(okK and type(kids) == "table" and kids or {}) do
+      local no = tonumber(obj.no)
+      if not no and poolName == "Tags" then no = i end
+      if no then
+        used[no] = obj.name or ""
+        objs[no] = obj
+        if no > maxNo then maxNo = no end
+      end
+    end
+  end
+  return used, maxNo, objs
+end
+
+-- Objet n° no d'un pool (les tags sont cherchés par leur numéro)
+local function poolObj(poolName, no)
+  if not no then return nil end
+  if poolName == "Tags" then
+    local _, _, objs = readPool(poolName)
+    return objs[no]
+  end
+  local p = pool(poolName)
+  return p and p[no]
+end
+
+local function exists(poolName, no)
+  return poolObj(poolName, no) ~= nil
 end
 
 local function firstFree(poolName, from, count)
@@ -106,24 +140,9 @@ local PICKERS = {
   [4] = { field = "macro", pool = "Macros",    title = "Macro" },
   [5] = { field = "tcNo",  pool = "Timecodes", title = "Timecode" },
   [6] = { field = "seq",   pool = "Sequences", title = "Sequence" },
+  [7] = { field = "tagNo", pool = "Tags",      title = "Tag" },
 }
 
--- Lit le pool : used[no] = nom, maxNo = plus grand numéro occupé.
-local function readPool(poolName)
-  local p = pool(poolName)
-  local used, maxNo, objs = {}, 0, {}
-  if p then
-    for _, obj in ipairs(p:Children()) do
-      local no = tonumber(obj.no)
-      if no then
-        used[no] = obj.name or ""
-        objs[no] = obj
-        if no > maxNo then maxNo = no end
-      end
-    end
-  end
-  return used, maxNo, objs
-end
 
 -- block : nombre de numéros consécutifs nécessaires (séquence main + extras)
 local function hasRoom(used, n, block)
@@ -291,8 +310,10 @@ local F = {
   extras = "Nombre d'extras (0-10)",
   cues   = "Cues de song",
   tcNo   = "N° timecode",
+  tagNo  = "N° tag",
 }
 local S_TC = "Créer le timecode"
+local S_TAG = "Poser le tag"
 
 local function defaultValues()
   local seq = firstFree("Sequences", 1, 1 + CFG.defaults.extras)
@@ -306,6 +327,8 @@ local function defaultValues()
     cues   = CFG.defaults.cues,
     tcNo   = firstFree("Timecodes", 1),
     tcOn   = true,
+    tagNo  = firstFree("Tags", 1),
+    tagOn  = true,
   }
 end
 
@@ -314,7 +337,7 @@ local function askSetup(v, errorText)
   local msg = "Remplis le setup de la song puis valide.\n"
            .. "Les espaces du nom seront remplacés par _.\n"
            .. "Les extras sont placés juste après la séquence main.\n"
-           .. "Page, Macro, Timecode, Sequence : tape le numéro ou ouvre la liste du pool."
+           .. "Page, Macro, Timecode, Sequence, Tag : tape le numéro ou ouvre la liste du pool."
   if errorText then msg = "/!\\ " .. errorText .. "\n\n" .. msg end
 
   local r = Box({
@@ -325,6 +348,7 @@ local function askSetup(v, errorText)
       { value = 4, name = "Liste Macros..." },
       { value = 5, name = "Liste Timecodes..." },
       { value = 6, name = "Liste Sequences..." },
+      { value = 7, name = "Liste Tags..." },
       { value = 1, name = "Suivant" },
       { value = 0, name = "Annuler" },
     },
@@ -337,8 +361,9 @@ local function askSetup(v, errorText)
       { name = F.extras, value = tostring(v.extras),  whiteFilter = num, vkPlugin = "NumericInput" },
       { name = F.cues,   value = tostring(v.cues),    whiteFilter = num, vkPlugin = "NumericInput" },
       { name = F.tcNo,   value = tostring(v.tcNo),    whiteFilter = num, vkPlugin = "NumericInput" },
+      { name = F.tagNo,  value = tostring(v.tagNo),   whiteFilter = num, vkPlugin = "NumericInput" },
     },
-    states   = { { name = S_TC, state = v.tcOn } },
+    states   = { { name = S_TC, state = v.tcOn }, { name = S_TAG, state = v.tagOn } },
   })
   if not r or r.result == 0 then return nil end
 
@@ -354,13 +379,14 @@ local function askSetup(v, errorText)
     cues    = toInt(i[F.cues]),
     tcNo    = toInt(i[F.tcNo]),
     tcOn    = (r.states or {})[S_TC] and true or false,
+    tagNo   = toInt(i[F.tagNo]),
+    tagOn   = (r.states or {})[S_TAG] and true or false,
   }
 end
 
 -- Ajoute « Page 3 « nom » » à la liste si l'emplacement est occupé
 local function busyAdd(busy, poolName, label, no)
-  local p = pool(poolName)
-  local o = p and no and p[no]
+  local o = poolObj(poolName, no)
   if not o then return end
   local nm = o.name and tostring(o.name) or ""
   busy[#busy + 1] = label .. " " .. no .. ((nm ~= "") and (" « " .. nm .. " »") or "")
@@ -369,8 +395,10 @@ end
 -- Renvoie un texte d'erreur bloquante, plus la liste des emplacements occupés.
 local function validate(v)
   if v.name == "" then return "Donne un nom à la song." end
-  for _, k in ipairs({ "page", "bpm", "macro", "seq", "extras", "cues", "tcNo" }) do
-    if not v[k] and (k ~= "tcNo" or v.tcOn) then return "Champ invalide : " .. F[k] end
+  for _, k in ipairs({ "page", "bpm", "macro", "seq", "extras", "cues", "tcNo", "tagNo" }) do
+    if not v[k] and (k ~= "tcNo" or v.tcOn) and (k ~= "tagNo" or v.tagOn) then
+      return "Champ invalide : " .. F[k]
+    end
   end
   if v.extras > CFG.maxExtras then return "Maximum " .. CFG.maxExtras .. " extras (executors 121 à 130)." end
   if v.cues < 1 then return "Il faut au moins 1 cue de song." end
@@ -380,6 +408,7 @@ local function validate(v)
   for s = v.seq, v.seq + v.extras do busyAdd(busy, "Sequences", "Séquence", s) end
   busyAdd(busy, "Macros", "Macro", v.macro)
   if v.tcOn then busyAdd(busy, "Timecodes", "Timecode", v.tcNo) end
+  if v.tagOn then busyAdd(busy, "Tags", "Tag", v.tagNo) end
   return nil, busy
 end
 
@@ -479,6 +508,7 @@ local function recapText(v, busy)
   t[#t + 1] = "Cues : 0.5 Mise, 0.6/0.7 TC, 1 a " .. v.cues
            .. ", " .. (v.cues + 1) .. " Black Out, " .. (v.cues + 2) .. " Off TC"
   t[#t + 1] = v.tcOn and ("Timecode " .. v.tcNo .. ' "' .. v.name .. '"') or "Timecode : non"
+  t[#t + 1] = v.tagOn and ("Tag " .. v.tagNo .. ' "' .. v.name .. '"') or "Tag : non"
   if busy and #busy > 0 then
     t[#t + 1] = ""
     t[#t + 1] = "/!\\ DEJA OCCUPE (sera ecrase) : " .. table.concat(busy, ", ")
@@ -580,23 +610,10 @@ end
 
 -- ---- Tag de la song (Jo, 12/10) : un tag au nom de la song sur la page, les
 -- séquences, le timecode et la macro, pour filtrer et pour d'autres plugins.
--- Commandes de Tags UI Helper (BakaCowpoke, CC0) : Store Tag "Nom",
--- Assign Tag "Nom" At Sequence 5, Assign Off Tag "Nom" At ... ; les tags sont
--- dans ShowData().Tags (plus dans DataPool).
-local function tagNo(name)
-  local okT, tags = pcall(function() return ShowData().Tags end)
-  if not okT or not tags then return nil end
-  local okK, kids = pcall(function() return tags:Children() end)
-  for i, t in ipairs(okK and type(kids) == "table" and kids or {}) do
-    local okN, nm = pcall(function() return t.name end)
-    if okN and tostring(nm) == name then
-      local no
-      pcall(function() no = tonumber(t.no) end)
-      return no or i
-    end
-  end
-  return nil
-end
+-- Les tags sont dans ShowData().Tags (plus dans DataPool), numérotés comme un
+-- pool ; on vise toujours le tag par son numéro (deux tags peuvent avoir le
+-- même nom). Commandes comme Tags UI Helper (BakaCowpoke, CC0) :
+-- Assign Tag ... At Sequence 5, Assign Off Tag ... At ...
 
 -- « Page 3 », « Sequence 101 Thru 104 », « Timecode 7 », « Macro 413 »
 local function songObjects(page, seq, extras, tc, macro)
@@ -607,16 +624,64 @@ local function songObjects(page, seq, extras, tc, macro)
   return t
 end
 
-local function tagSong(name, objs, warnings)
-  if not tagNo(name) then
-    local before = #cmdErrors
-    C('Store Tag "' .. name .. '"')
-    if #cmdErrors > before then
-      warnings[#warnings + 1] = 'Tag "' .. name .. '" non créé, objets non taggés'
-      return
+-- Crée le tag n° no au nom de la song. Un tag déjà à ce numéro est d'abord
+-- supprimé (écrasement confirmé par un second appui, comme les autres pools).
+local function storeTag(no, name, warnings)
+  if exists("Tags", no) then C("Delete Tag " .. no .. " /NoConfirmation") end
+  local before = #cmdErrors
+  C("Store Tag " .. no)
+  C("Label Tag " .. no .. ' "' .. name .. '"')
+  if #cmdErrors > before then
+    warnings[#warnings + 1] = "Tag " .. no .. " non créé, objets non taggés"
+    return false
+  end
+  return true
+end
+
+-- off = true : retire le tag (refus seulement noté : l'objet peut ne pas l'avoir)
+local function tagObjects(no, objs, off)
+  for _, o in ipairs(objs) do
+    if off then Cq("Assign Off Tag " .. no .. " At " .. o)
+    else C("Assign Tag " .. no .. " At " .. o) end
+  end
+end
+
+-- Noms des tags d'un objet, nil si MA ne les donne pas à lire. Format pas
+-- encore vu sur console : texte (« A B » ou « A, B ») ou objet avec enfants.
+local tagFormatLogged = false
+local function tagsOf(o)
+  local v
+  pcall(function() v = o:Get("Tags") end)
+  if v == nil then pcall(function() v = o.tags end) end
+  if not tagFormatLogged then
+    tagFormatLogged = true
+    if v == nil then
+      Printf("[SongCreator] tags des objets illisibles : pas de verification par le tag")
+    else
+      Printf("[SongCreator] tags lus sur " .. tostring(o.name) .. " : " .. type(v) .. " « " .. tostring(v) .. " »")
     end
   end
-  for _, o in ipairs(objs) do C('Assign Tag "' .. name .. '" At ' .. o) end
+  if v == nil then return nil end
+  local names = {}
+  if type(v) == "userdata" then
+    local okK, kids = pcall(function() return v:Children() end)
+    if not (okK and type(kids) == "table") then return nil end
+    for _, k in ipairs(kids) do
+      local nm
+      pcall(function() nm = k.name end)
+      if nm then names[tostring(nm)] = true end
+    end
+  else
+    for tok in tostring(v):gmatch("[^%s,;]+") do names[(tok:gsub(":%d+$", ""))] = true end
+  end
+  return names
+end
+
+-- true / false, ou nil si on ne peut pas savoir
+local function hasTag(o, name)
+  local t = tagsOf(o)
+  if not t then return nil end
+  return t[name] == true
 end
 
 -- Écrit la commande d'une cue via l'API Lua (pas de souci de guillemets
@@ -740,8 +805,10 @@ local function createBody(v, warnings)
   -- 6. Macro de rappel
   buildSongMacro(v, warnings)
 
-  -- 7. Tag de la song sur tous ses objets
-  tagSong(v.name, songObjects(v.page, v.seq, v.extras, v.tcOn and v.tcNo or nil, v.macro), warnings)
+  -- 7. Tag de la song sur tous ses objets (réglage « Poser le tag »)
+  if v.tagOn and storeTag(v.tagNo, v.name, warnings) then
+    tagObjects(v.tagNo, songObjects(v.page, v.seq, v.extras, v.tcOn and v.tcNo or nil, v.macro))
+  end
 
 end
 
@@ -793,6 +860,7 @@ local function findSongs()
   local seqByName, _, seqObjs = numbersByName("Sequences")
   local tcByName = numbersByName("Timecodes")
   local macroByName = numbersByName("Macros")
+  local tagByName = numbersByName("Tags")
   local nos = {}
   for no in pairs(pages) do nos[#nos + 1] = no end
   table.sort(nos)
@@ -801,12 +869,15 @@ local function findSongs()
     local name = tostring(pages[p] or "")
     local s = (name ~= "") and seqByName[name]
     if s then
+      -- extras : séquences qui suivent avec ce nom en note, ou qui portent le tag
       local k = 0
-      while k < CFG.maxExtras and seqObjs[s + k + 1] and noteOf(seqObjs[s + k + 1]) == name do
+      while k < CFG.maxExtras and seqObjs[s + k + 1] do
+        local o = seqObjs[s + k + 1]
+        if noteOf(o) ~= name and hasTag(o, name) ~= true then break end
         k = k + 1
       end
       songs[#songs + 1] = { name = name, page = p, seq = s, extras = k, seqObj = seqObjs[s],
-                            tc = tcByName[name], macro = macroByName[name] }
+                            tc = tcByName[name], macro = macroByName[name], tag = tagByName[name] }
     end
   end
   return songs
@@ -821,9 +892,39 @@ local function resolveSong(song)
   return nil
 end
 
+-- Vérification par le tag (Jo, 12/10) : objets des pools qui portent le tag
+-- de la song. outside = ceux qui ne font pas partie de la song (page,
+-- séquences main + extras, timecode, macro) ; readable = false si MA ne
+-- donne pas les tags des objets à lire.
+local MEMBER_POOLS = { { "Pages", "Page" }, { "Sequences", "Séquence" },
+                       { "Timecodes", "Timecode" }, { "Macros", "Macro" } }
+local function tagMembers(s)
+  local r = { count = 0, outside = {}, readable = false }
+  if not s.tag then return r end
+  local mine = { Pages = { [s.page] = true }, Sequences = {}, Timecodes = {}, Macros = {} }
+  for n = s.seq, s.seq + s.extras do mine.Sequences[n] = true end
+  if s.tc then mine.Timecodes[s.tc] = true end
+  if s.macro then mine.Macros[s.macro] = true end
+  for _, P in ipairs(MEMBER_POOLS) do
+    local _, _, objs = readPool(P[1])
+    local nos = {}
+    for no in pairs(objs) do nos[#nos + 1] = no end
+    table.sort(nos)
+    for _, no in ipairs(nos) do
+      local has = hasTag(objs[no], s.name)
+      if has ~= nil then r.readable = true end
+      if has then
+        r.count = r.count + 1
+        if not mine[P[1]][no] then r.outside[#r.outside + 1] = P[2] .. " " .. no end
+      end
+    end
+  end
+  return r
+end
+
 -- Objets qui portent déjà ce nom (Page 3, Séquence 101...)
 local NAMED_POOLS = { { "Pages", "Page" }, { "Sequences", "Séquence" },
-                      { "Timecodes", "Timecode" }, { "Macros", "Macro" } }
+                      { "Timecodes", "Timecode" }, { "Macros", "Macro" }, { "Tags", "Tag" } }
 local function nameUsers(name)
   local t = {}
   for _, p in ipairs(NAMED_POOLS) do
@@ -946,12 +1047,10 @@ local function renameBody(warnings, s, new)
   local nCues = renameInCommands(cueCommandHolders(s.seq, s.extras), s.name, new, warnings)
   local nMacro = renameInCommands(macroLines(s.macro), s.name, new, warnings)
   if currentSongVar() == s.name then C("SetGlobalVariable currentSong " .. q) end
-  -- tag : celui de l'ancien nom est renommé (les objets le gardent), sinon
-  -- créé ; puis posé sur tous les objets (songs faites avant la 0.7.1)
-  local oldTag = tagNo(s.name)
-  if oldTag and not tagNo(new) then C("Label Tag " .. oldTag .. " " .. q) end
-  tagSong(new, songObjects(s.page, s.seq, s.extras, s.tc, s.macro), warnings)
-  return { "Page " .. s.page .. ", séquence " .. s.seq .. ", notes et tag : « " .. new .. " »",
+  -- tag de la song renommé : les objets qui le portent le gardent
+  if s.tag then C("Label Tag " .. s.tag .. " " .. q) end
+  return { "Page " .. s.page .. ", séquence " .. s.seq .. " et notes : « " .. new .. " »",
+           s.tag and ("Tag " .. s.tag .. " : « " .. new .. " »") or "Pas de tag",
            s.tc and ("Timecode " .. s.tc .. " : « " .. new .. " »") or "Pas de timecode",
            s.macro and ("Macro " .. s.macro .. " : « " .. new .. " »") or "Pas de macro de rappel",
            nCues .. " commande(s) de cue et " .. nMacro .. " ligne(s) de macro modifiée(s)" }
@@ -967,8 +1066,17 @@ local function deleteBody(warnings, s)
   if s.tc then C("Delete Timecode " .. s.tc .. " /NoConfirmation") end
   C("Delete Page " .. s.page .. " /NoConfirmation")
   C("Delete Sequence " .. seqRange(s.seq, s.extras) .. " /NoConfirmation")
-  local tag = tagNo(s.name)
-  if tag then C("Delete Tag " .. tag .. " /NoConfirmation") end
+  -- tag : supprimé, sauf s'il reste porté par des objets hors de la song
+  local tag, kept = s.tag, nil
+  if tag then
+    local m = tagMembers(s)
+    if #m.outside > 0 then
+      kept = m.outside
+      warnings[#warnings + 1] = "Tag " .. tag .. " gardé : encore porté par " .. table.concat(kept, ", ")
+    else
+      C("Delete Tag " .. tag .. " /NoConfirmation")
+    end
+  end
   local left = {}
   if exists("Pages", s.page) then left[#left + 1] = "Page " .. s.page end
   for n = s.seq, s.seq + s.extras do
@@ -976,7 +1084,7 @@ local function deleteBody(warnings, s)
   end
   if s.tc and exists("Timecodes", s.tc) then left[#left + 1] = "Timecode " .. s.tc end
   if s.macro and exists("Macros", s.macro) then left[#left + 1] = "Macro " .. s.macro end
-  if tag and tagNo(s.name) then left[#left + 1] = 'Tag "' .. s.name .. '"' end
+  if tag and not kept and exists("Tags", tag) then left[#left + 1] = "Tag " .. tag end
   if #left > 0 then
     warnings[#warnings + 1] = "Toujours dans le show : " .. table.concat(left, ", ")
   end
@@ -985,7 +1093,7 @@ local function deleteBody(warnings, s)
              .. " supprimée" .. (s.extras > 0 and "s" or ""),
            s.tc and ("Timecode " .. s.tc .. " supprimé") or "Pas de timecode",
            s.macro and ("Macro " .. s.macro .. " supprimée") or "Pas de macro de rappel",
-           tag and ('Tag « ' .. s.name .. ' » supprimé') or "Pas de tag",
+           tag and ("Tag " .. tag .. (kept and " gardé" or " supprimé")) or "Pas de tag",
            "Un Oops remet toute la song" }
 end
 
@@ -1388,15 +1496,18 @@ local function duplicateBody(warnings, s, d)
     end
   end
 
-  -- 5. Tag : la copie perd celui de l'origine (s'il a suivi la copie) et prend le sien
+  -- 5. Tag : la copie perd celui de l'origine (s'il a suivi la copie) et prend
+  -- le sien si un numéro est donné (champ vide = pas de tag)
   local objs = songObjects(d.page, d.seq, k,
                            (s.tc and exists("Timecodes", d.tcNo)) and d.tcNo or nil,
                            (s.macro and exists("Macros", d.macro)) and d.macro or nil)
-  if tagNo(s.name) then
-    for _, o in ipairs(objs) do Cq('Assign Off Tag "' .. s.name .. '" At ' .. o) end
+  if s.tag then tagObjects(s.tag, objs, true) end
+  if d.tagNo and storeTag(d.tagNo, d.name, warnings) then
+    tagObjects(d.tagNo, objs)
+    done[#done + 1] = "Tag " .. d.tagNo .. " « " .. d.name .. " » sur la copie"
+  elseif not d.tagNo then
+    done[#done + 1] = "Pas de tag pour la copie"
   end
-  tagSong(d.name, objs, warnings)
-  done[#done + 1] = "Tag « " .. d.name .. " » sur la copie"
   return done
 end
 
@@ -1412,7 +1523,7 @@ end
 --  (IconAlignmentH, vérifié sur console en 0.4.1).
 -- ---------------------------------------------------------------------------
 local UI = {
-  W = 1300, H = 760,             -- taille de départ (au plus 95 % de l'écran)
+  W = 1300, H = 870,             -- taille de départ (au plus 95 % de l'écran)
   title = 60, foot = 80,         -- barre de titre, barre de boutons
   modesW = 180, recapW = 430,    -- colonne des modes, panneau de droite
   row = 54, sect = 38, gap = 14, -- ligne de champ, titre de section, espace
@@ -1442,12 +1553,13 @@ end
 local ui = {}
 signalTable.SC_Action = function(caller) ui.action = caller.SignalValue end
 
-local FIELD_ORDER = { "name", "page", "seq", "macro", "tcNo", "bpm", "extras", "cues" }
+local FIELD_ORDER = { "name", "page", "seq", "macro", "tcNo", "tagNo", "bpm", "extras", "cues" }
 local SLOTS = {
   { key = "page",  pool = "Pages",     label = "Page" },
   { key = "seq",   pool = "Sequences", label = "Séquence main" },
   { key = "macro", pool = "Macros",    label = "Macro de rappel" },
   { key = "tcNo",  pool = "Timecodes", label = "Timecode" },
+  { key = "tagNo", pool = "Tags",      label = "Tag" },
 }
 
 -- Réglage répété à chaque rafraîchissement : pas de message s'il est refusé.
@@ -1646,7 +1758,7 @@ end
 
 local function readFields(w)
   local raw = w.fields.name.Content or ""
-  local v = { rawName = raw, name = cleanName(raw), tcOn = w.tcOn }
+  local v = { rawName = raw, name = cleanName(raw), tcOn = w.tcOn, tagOn = w.tagOn }
   for _, k in ipairs(FIELD_ORDER) do
     if k ~= "name" then v[k] = toInt(w.fields[k].Content) end
   end
@@ -1657,7 +1769,7 @@ end
 local function signature(w)
   local t = { w.mode or "", w.song and (w.song.page .. ":" .. w.song.name) or "-" }
   for _, k in ipairs(FIELD_ORDER) do t[#t + 1] = tostring(w.fields[k].Content) end
-  t[#t + 1] = tostring(w.tcOn)
+  t[#t + 1] = tostring(w.tcOn) .. tostring(w.tagOn)
   if w.sp then
     t[#t + 1] = tostring(w.sp.name.Content)
     for _, s in ipairs(SLOTS) do t[#t + 1] = tostring(w.dup.fields[s.key].Content) end
@@ -1681,7 +1793,8 @@ local function recapLines(v)
   else
     t[#t + 1] = "Extras : aucun"
   end
-  t[#t + 1] = "Note et tag « " .. name .. " » partout"
+  t[#t + 1] = v.tagOn and ("Tag " .. q(v.tagNo) .. " et notes « " .. name .. " »")
+                       or ("Notes « " .. name .. " », pas de tag")
   t[#t + 1] = "Cues 0.5 Mise, 0.6 Select TC, 0.7 Go TC"
   t[#t + 1] = "Cues 1 à " .. q(v.cues) .. ", " .. (c + 1) .. " Black Out, " .. (c + 2) .. " Off TC"
   t[#t + 1] = "Timecode " .. (v.tcOn and (q(v.tcNo) .. " « " .. name .. " »") or ": non")
@@ -1693,10 +1806,9 @@ end
 -- État d'un emplacement, affiché à droite du numéro : libre ou occupé (par quoi)
 local function slotStatus(poolName, no, block)
   if not no then return "numéro invalide", "Global.ErrorText" end
-  local p = pool(poolName)
   local first, count = nil, 0
   for n = no, no + block - 1 do
-    local o = p and p[n]
+    local o = poolObj(poolName, n)
     if o then
       count = count + 1
       if not first then
@@ -1748,6 +1860,15 @@ local function setTcButton(w)
   quiet(w.fields.tcNo, "Enabled", en)
   quiet(w.status.tcNo, "Enabled", en)
   quiet(w.pickBtn.tcNo, "Enabled", en)
+end
+
+local function setTagButton(w)
+  w.tagBtn.Text = w.tagOn and "Oui" or "Non"
+  quiet(w.tagBtn, "TextColor", w.tagOn and "Global.Selected" or "Global.Text")
+  local en = w.tagOn and "Yes" or "No"
+  quiet(w.fields.tagNo, "Enabled", en)
+  quiet(w.status.tagNo, "Enabled", en)
+  quiet(w.pickBtn.tagNo, "Enabled", en)
 end
 
 local pickState = {}
@@ -2098,7 +2219,7 @@ end
 local function buildSongPanel(w, body)
   local sp = grid(body, cell(1, 0), 1, 8)
   opt(sp, { Margin = pad(8, 8, PANEL, PANEL) })
-  local sizes = { UI.sect, UI.row, 30, UI.gap, UI.row + 30, UI.gap, UI.sect + 4 * UI.row, false }
+  local sizes = { UI.sect, UI.row, 30, UI.gap, UI.row + 30, UI.gap, UI.sect + #SLOTS * UI.row, false }
   for i = 1, #sizes do
     if sizes[i] then fixRow(sp, i, sizes[i]) else sp[1][i].SizePolicy = "Stretch" end
   end
@@ -2124,9 +2245,9 @@ local function buildSongPanel(w, body)
   local maName = label(l2, cell(1, 0), "", { Font = UI.fontSmall, TextColor = "Global.LabelText" })
 
   -- emplacements de la copie (Dupliquer)
-  local sg = grid(sp, cell(0, 6), 1, 5)
+  local sg = grid(sp, cell(0, 6), 1, 1 + #SLOTS)
   fixRow(sg, 1, UI.sect)
-  for r = 2, 5 do fixRow(sg, r, UI.row) end
+  for r = 2, 1 + #SLOTS do fixRow(sg, r, UI.row) end
   section(sg, cell(0, 0), "Emplacements de la copie")
   w.dup = { fields = {}, status = {}, pickBtn = {} }
   for i, s in ipairs(SLOTS) do slotLine(sg, i, s, w.dup, "dpick_", "") end
@@ -2161,7 +2282,7 @@ local function applyView(w)
   w.recapTitle.Text = MODES[m].recap
   quiet(w.defaultsBtn, "Enabled", (m ~= "delete") and "Yes" or "No")
   quiet(w.defaultsBtn, "TextColor", (m ~= "delete") and "Global.Text" or "Global.Disabled")
-  if m == "create" then setTcButton(w) end
+  if m == "create" then setTcButton(w); setTagButton(w) end
   if m == "dup" then setDupSlotsEnabled(w) end
 end
 
@@ -2208,7 +2329,8 @@ local function buildSetupWindow(v)
   base[1][2].SizePolicy = "Stretch"
   opt(base, { MinSize = math.min(1000, W) .. "," .. math.min(640, H), MaxSize = maxW .. "," .. maxH,
               AlignmentH = "Center", AlignmentV = "Center", AutoClose = "No", CloseOnEscape = "Yes" })
-  local w = { overlay = overlay, base = base, fields = {}, status = {}, pickBtn = {}, tcOn = v.tcOn }
+  local w = { overlay = overlay, base = base, fields = {}, status = {}, pickBtn = {}, tcOn = v.tcOn,
+              tagOn = v.tagOn }
 
   -- Barre de titre : on la fait glisser pour déplacer la fenêtre, croix à droite
   local tb = base:Append("TitleBar")
@@ -2258,11 +2380,14 @@ local function buildSetupWindow(v)
   end
 
   -- Centre : la song, les emplacements, les réglages
-  local main = grid(body, cell(1, 0), 1, 15)
+  -- lignes : Song (3), espace, Emplacements (titre + une par pool), espace,
+  -- Réglages (titre + 3), reste, note du bas
+  local sizes = { UI.sect, UI.row, 30, UI.gap, UI.sect }
+  for _ = 1, #SLOTS do sizes[#sizes + 1] = UI.row end
+  for _, sz in ipairs({ UI.gap, UI.sect, UI.row, UI.row, UI.row, false, 30 }) do sizes[#sizes + 1] = sz end
+  local main = grid(body, cell(1, 0), 1, #sizes)
   opt(main, { Margin = pad(8, 8, PANEL, PANEL) })
   w.createPanel = main
-  local sizes = { UI.sect, UI.row, 30, UI.gap, UI.sect, UI.row, UI.row, UI.row, UI.row,
-                  UI.gap, UI.sect, UI.row, UI.row, false, 30 }
   for i = 1, #sizes do
     if sizes[i] then fixRow(main, i, sizes[i]) else main[1][i].SizePolicy = "Stretch" end
   end
@@ -2277,20 +2402,25 @@ local function buildSetupWindow(v)
   section(main, cell(0, 4), "Emplacements")
   for i, s in ipairs(SLOTS) do slotLine(main, 4 + i, s, w, "pick_", v[s.key]) end
 
-  section(main, cell(0, 10), "Réglages")
-  local r1 = line(main, 11, { UI.labelW, UI.numW, 24, UI.label2W, UI.numW, false })
+  local rr = 5 + #SLOTS   -- titre « Réglages »
+  section(main, cell(0, rr), "Réglages")
+  local r1 = line(main, rr + 1, { UI.labelW, UI.numW, 24, UI.label2W, UI.numW, false })
   label(r1, cell(0, 0), "BPM")
   w.fields.bpm = field(r1, cell(1, 0), v.bpm, true)
   label(r1, cell(3, 0), "Extras (0 à 10)")
   w.fields.extras = field(r1, cell(4, 0), v.extras, true)
-  local r2 = line(main, 12, { UI.labelW, UI.numW, 24, UI.label2W, UI.numW, false })
+  local r2 = line(main, rr + 2, { UI.labelW, UI.numW, 24, UI.label2W, UI.numW, false })
   label(r2, cell(0, 0), "Cues de song")
   w.fields.cues = field(r2, cell(1, 0), v.cues, true)
   label(r2, cell(3, 0), "Créer le timecode")
   w.tcBtn = button(r2, cell(4, 0), "", "tc_toggle")
   opt(w.tcBtn, { Font = UI.fontValue })
+  local r3 = line(main, rr + 3, { UI.labelW, UI.numW, 24, UI.label2W, UI.numW, false })
+  label(r3, cell(3, 0), "Poser le tag")
+  w.tagBtn = button(r3, cell(4, 0), "", "tag_toggle")
+  opt(w.tagBtn, { Font = UI.fontValue })
 
-  label(main, cell(0, 14), "Exec main " .. CFG.execMain .. "   -   extras " .. CFG.execExtraFrom .. " à "
+  label(main, cell(0, #sizes - 1), "Exec main " .. CFG.execMain .. "   -   extras " .. CFG.execExtraFrom .. " à "
         .. (CFG.execExtraFrom + CFG.maxExtras - 1) .. "   -   pages communes " .. CFG.commonPages
         .. "   -   Speed Master " .. CFG.speedMaster,
         { TextColor = "Global.Disabled", Font = UI.fontSmall })
@@ -2336,6 +2466,7 @@ local function buildSetupWindow(v)
 
   w.mode = "create"
   setTcButton(w)
+  setTagButton(w)
   return w
 end
 
@@ -2344,22 +2475,48 @@ local PICK_FIELDS = {
   pick_macro = { field = "macro", pool = "Macros",    title = "Macro" },
   pick_seq   = { field = "seq",   pool = "Sequences", title = "Sequence" },
   pick_tcNo  = { field = "tcNo",  pool = "Timecodes", title = "Timecode" },
+  pick_tagNo = { field = "tagNo", pool = "Tags",      title = "Tag" },
 }
 local DUP_PICK = {
   dpick_page  = PICK_FIELDS.pick_page,
   dpick_macro = PICK_FIELDS.pick_macro,
   dpick_seq   = PICK_FIELDS.pick_seq,
   dpick_tcNo  = PICK_FIELDS.pick_tcNo,
+  dpick_tagNo = PICK_FIELDS.pick_tagNo,
 }
 
 -- ---- Panneau Song : contenu selon le mode ----
-local function songInfo(s)
+local function songInfo(s, m)
   local t = { "Séquence " .. s.seq .. ((s.extras > 0)
                 and (" + " .. s.extras .. " extras (" .. (s.seq + 1) .. " à " .. (s.seq + s.extras) .. ")")
                 or ", sans extras") }
   t[#t + 1] = s.tc and ("timecode " .. s.tc) or "pas de timecode"
   t[#t + 1] = s.macro and ("macro " .. s.macro) or "pas de macro"
+  if not s.tag then
+    t[#t + 1] = "pas de tag"
+  elseif m and m.readable then
+    t[#t + 1] = "tag " .. s.tag .. " (" .. m.count .. " objet" .. (m.count > 1 and "s" or "") .. ")"
+  else
+    t[#t + 1] = "tag " .. s.tag
+  end
   return table.concat(t, "   -   ")
+end
+
+-- Vérification par le tag, refaite seulement quand la song change
+local function songMembers(w, s)
+  local key = s.page .. ":" .. s.name .. ":" .. s.seq .. ":" .. s.extras .. ":" .. tostring(s.tag)
+  if w.memberKey ~= key then
+    w.memberKey = key
+    w.members = tagMembers(s)
+  end
+  return w.members
+end
+
+-- Ligne d'alerte : objets taggés hors de la song (ils ne sont pas touchés)
+local function outsideText(m, s)
+  if not m or #m.outside == 0 then return nil end
+  return "Aussi taggés « " .. s.name .. " » hors de la song : " .. table.concat(m.outside, ", ")
+         .. ". Ils ne sont pas touchés."
 end
 
 local function showSongRow(w)
@@ -2367,7 +2524,7 @@ local function showSongRow(w)
   if s then
     sp.songBtn.Text = s.name .. "   (page " .. s.page .. ")"
     quiet(sp.songBtn, "TextColor", "Global.Text")
-    sp.info.Text = songInfo(s)
+    sp.info.Text = songInfo(s, songMembers(w, s))
   else
     sp.songBtn.Text = w.lost and ("« " .. w.lost .. " » n'existe plus : choisis une song")
                       or "Choisis une song"
@@ -2390,6 +2547,8 @@ local function setDupDefaults(w, s)
   f.seq.Content = tostring(firstFree("Sequences", s.seq + s.extras + 1, 1 + s.extras))
   f.macro.Content = s.macro and tostring(firstFree("Macros", s.macro + 1)) or ""
   f.tcNo.Content = s.tc and tostring(firstFree("Timecodes", s.tc + 1)) or ""
+  -- tag : comme la song (vide = pas de tag pour la copie)
+  f.tagNo.Content = s.tag and tostring(firstFree("Tags", s.tag + 1)) or ""
   w.dupFor = s.page .. ":" .. s.name
 end
 
@@ -2442,11 +2601,13 @@ local function validateDup(s, d)
   end
   if s.macro and d.macro == s.macro then return "La copie doit avoir une autre macro que la " .. s.macro .. "." end
   if s.tc and d.tcNo == s.tc then return "La copie doit avoir un autre timecode que le " .. s.tc .. "." end
+  if s.tag and d.tagNo == s.tag then return "La copie doit avoir un autre tag que le " .. s.tag .. "." end
   local busy = {}
   busyAdd(busy, "Pages", "Page", d.page)
   for n = d.seq, d.seq + k do busyAdd(busy, "Sequences", "Séquence", n) end
   if s.macro then busyAdd(busy, "Macros", "Macro", d.macro) end
   if s.tc then busyAdd(busy, "Timecodes", "Timecode", d.tcNo) end
+  if d.tagNo then busyAdd(busy, "Tags", "Tag", d.tagNo) end
   return nil, busy
 end
 
@@ -2471,7 +2632,8 @@ local function renameLines(w, s, new)
   return table.concat({
     "Page " .. s.page .. " -> « " .. nn .. " »",
     "Séquence " .. s.seq .. " -> « " .. nn .. " »",
-    "Note et tag « " .. nn .. " » partout",
+    "Notes -> « " .. nn .. " »",
+    s.tag and ("Tag " .. s.tag .. " -> « " .. nn .. " »") or "Pas de tag à ce nom",
     s.tc and ("Timecode " .. s.tc .. " -> « " .. nn .. " »") or "Pas de timecode à ce nom",
     s.macro and ("Macro " .. s.macro .. " -> « " .. nn .. " »") or "Pas de macro à ce nom",
     c.cues .. " commande(s) de cue avec ce nom",
@@ -2489,7 +2651,8 @@ local function dupLines(s, d)
     "Exec " .. execText(k, ", ") .. " sur la page " .. q(d.page),
     s.tc and ("Timecode " .. s.tc .. " -> " .. q(d.tcNo) .. ", liens rebranchés") or "Pas de timecode à copier",
     s.macro and ("Macro " .. s.macro .. " -> " .. q(d.macro)) or "Pas de macro à copier",
-    "Nom, note et tag « " .. ((d.name ~= "") and d.name or "?") .. " » partout",
+    d.tagNo and ("Tag " .. (s.tag and (s.tag .. " -> ") or "") .. d.tagNo) or "Pas de tag pour la copie",
+    "Nom et notes « " .. ((d.name ~= "") and d.name or "?") .. " » partout",
     "Un Oops annule toute la copie",
   }
   return table.concat(t, "\n")
@@ -2502,7 +2665,7 @@ local function deleteLines(s)
     (s.extras > 0) and ("Extras " .. (s.seq + 1) .. " à " .. (s.seq + s.extras)) or "Pas d'extras",
     s.tc and ("Timecode " .. s.tc) or "Pas de timecode à ce nom",
     s.macro and ("Macro " .. s.macro) or "Pas de macro à ce nom",
-    tagNo(s.name) and ("Tag « " .. s.name .. " »") or "Pas de tag à ce nom",
+    s.tag and ("Tag " .. s.tag .. " « " .. s.name .. " »") or "Pas de tag à ce nom",
     "Un Oops remet toute la song",
   }, "\n")
 end
@@ -2527,10 +2690,15 @@ local function refreshSongMode(w)
     return { err = "pas de song" }
   end
 
+  local outside = outsideText(songMembers(w, s), s)
   if m == "rename" then
     local err, color = checkNewName(newName, s)
     setRecap(w, renameLines(w, s, newName))
-    setAlert(w, err or "Prêt.", err and color or "Global.SuccessText")
+    if err then
+      setAlert(w, err, color)
+    else
+      setAlert(w, outside and ("Prêt.\n" .. outside) or "Prêt.", "Global.SuccessText")
+    end
     return { song = s, err = err, name = newName, busy = {} }
 
   elseif m == "dup" then
@@ -2541,6 +2709,8 @@ local function refreshSongMode(w)
         txt, color = "pas de timecode dans la song", "Global.Disabled"
       elseif sl.key == "macro" and not s.macro then
         txt, color = "pas de macro dans la song", "Global.Disabled"
+      elseif sl.key == "tagNo" and not d.tagNo then
+        txt, color = "vide : la copie n'aura pas de tag", "Global.LabelText"
       else
         txt, color = slotStatus(sl.pool, d[sl.key], (sl.key == "seq") and (1 + s.extras) or 1)
       end
@@ -2553,7 +2723,10 @@ local function refreshSongMode(w)
     if err then
       setAlert(w, err, color or "Global.ErrorText")
     elseif #busy > 0 then
-      setAlert(w, "Déjà occupé, sera écrasé : " .. table.concat(busy, ", ") .. ".", "Global.WarningText")
+      setAlert(w, "Déjà occupé, sera écrasé : " .. table.concat(busy, ", ") .. "."
+               .. (outside and ("\n" .. outside) or ""), "Global.WarningText")
+    elseif outside then
+      setAlert(w, outside, "Global.WarningText")
     else
       setAlert(w, "Prêt.", "Global.SuccessText")
     end
@@ -2562,7 +2735,8 @@ local function refreshSongMode(w)
 
   -- Supprimer
   setRecap(w, deleteLines(s))
-  setAlert(w, "Toute la song sera supprimée. Un Oops la remet.", "Global.WarningText")
+  setAlert(w, "Toute la song sera supprimée. Un Oops la remet."
+           .. (outside and ("\n" .. outside .. " Le tag est gardé.") or ""), "Global.WarningText")
   return { song = s, busy = {} }
 end
 
@@ -2584,6 +2758,8 @@ local function runSetupWindow(w)
       local txt, color
       if s.key == "tcNo" and not input.tcOn then
         txt, color = "pas de timecode", "Global.Disabled"
+      elseif s.key == "tagNo" and not input.tagOn then
+        txt, color = "pas de tag", "Global.Disabled"
       else
         local block = (s.key == "seq") and (1 + (input.extras or 0)) or 1
         txt, color = slotStatus(s.pool, input[s.key], block)
@@ -2642,7 +2818,7 @@ local function runSetupWindow(w)
   local function hold()
     armed = false
     ui.action = nil   -- un clic fait pendant l'opération ne la relance pas
-    w.countKey = nil
+    w.countKey, w.memberKey = nil, nil
     setGo(w, "done")
     lastSig = signature(w)
   end
@@ -2676,14 +2852,19 @@ local function runSetupWindow(w)
       w.tcOn = not w.tcOn
       setTcButton(w)
       ui.dirty = true
+    elseif a == "tag_toggle" and w.mode == "create" then
+      w.tagOn = not w.tagOn
+      setTagButton(w)
+      ui.dirty = true
     elseif a == "defaults" then
       if w.mode == "create" then
         local d = defaultValues()
         for _, k in ipairs(FIELD_ORDER) do
           if k ~= "name" then w.fields[k].Content = tostring(d[k]) end
         end
-        w.tcOn = true
+        w.tcOn, w.tagOn = true, true
         setTcButton(w)
+        setTagButton(w)
       elseif w.song and w.mode == "rename" then
         w.sp.name.Content = w.song.name
         w.autoName = w.song.name
@@ -2820,6 +3001,7 @@ local function messageBoxFlow(v)
       macro = input.macro or v.macro, seq = input.seq or v.seq,
       extras = input.extras or v.extras, cues = input.cues or v.cues,
       tcNo = input.tcNo or v.tcNo, tcOn = input.tcOn,
+      tagNo = input.tagNo or v.tagNo, tagOn = input.tagOn,
     }
     local busy
     err = nil
