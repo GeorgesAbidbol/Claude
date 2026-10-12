@@ -10,7 +10,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.6.1"
+local VERSION = "0.6.2"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -108,17 +108,18 @@ local PICKERS = {
 -- Lit le pool : used[no] = nom, maxNo = plus grand numéro occupé.
 local function readPool(poolName)
   local p = pool(poolName)
-  local used, maxNo = {}, 0
+  local used, maxNo, objs = {}, 0, {}
   if p then
     for _, obj in ipairs(p:Children()) do
       local no = tonumber(obj.no)
       if no then
         used[no] = obj.name or ""
+        objs[no] = obj
         if no > maxNo then maxNo = no end
       end
     end
   end
-  return used, maxNo
+  return used, maxNo, objs
 end
 
 -- block : nombre de numéros consécutifs nécessaires (séquence main + extras)
@@ -199,13 +200,14 @@ local function closeWindow(overlay, base)
   end
 end
 
--- ---- Fenêtre de sélection native MA (PopupInput) ----
+-- ---- Fenêtre de sélection native MA (PopupInput), en secours ----
 -- Même fenêtre que les « Select ... » de la console : colonnes, filtre clavier.
 -- Elle liste les objets existants du pool (« 12 'Nom' ») puis des numéros libres.
+-- Pas de défilement ni d'apparences (vu sur console en 0.6.1).
 local FREE_SLOTS = 12
 
 -- title : nom du pool seul, MA ajoute « Select » devant (« Select Sequence »).
-local function pickFromPool(poolName, title, current, block, caller)
+local function pickWithPopupInput(poolName, title, current, block, caller)
   local used, maxNo = readPool(poolName)
   local items, numbers, selected = {}, {}, nil
   local function add(n, label)
@@ -774,6 +776,272 @@ local function line(parent, r, widths)
   return g
 end
 
+-- ---------------------------------------------------------------------------
+--  Liste d'un pool avec barre de défilement (v0.6.2)
+--  Recette ScrollBox + ScrollBarV reprise de BakaCowpoke (Tags UI Helper,
+--  CC0) : BaseInput, DialogFrame à 2 colonnes, ScrollBox nommée, barre dont
+--  ScrollTarget est le chemin "../nom" de la ScrollBox, cases posées en X/Y.
+--  Pas de Popup ni de ScrollableItemList : la liste de la v0.6.0 faite avec
+--  eux plantait MA dès l'ouverture.
+--  Tous les numéros du pool sont proposés comme dans la fenêtre du pool :
+--  objets existants (couleur de leur apparence) et numéros libres.
+-- ---------------------------------------------------------------------------
+local PICK = { W = 1100, H = 860, title = 50, foot = 46,
+               cellW = 210, cellH = 48, gap = 6,
+               after = 30,        -- numéros libres proposés après le dernier objet
+               maxCells = 1000 }  -- au-delà, seulement les objets et quelques trous
+local POOL_KIND = {
+  Pages     = { kind = "Page",     icon = "object_pages" },
+  Sequences = { kind = "Sequence", icon = "object_sequence" },
+  Macros    = { kind = "Macro",    icon = "object_macro" },
+  Timecodes = { kind = "Timecode", icon = "object_timecode" },
+}
+
+-- Numéros affichés dans la liste
+local function pickNumbers(used, maxNo)
+  local nos, last = {}, maxNo + PICK.after
+  if last <= PICK.maxCells then
+    for n = 1, last do nos[#nos + 1] = n end
+    return nos
+  end
+  -- très gros pool : tous les objets, des trous tant qu'il reste de la place, puis la suite
+  local count = 0
+  for _ in pairs(used) do count = count + 1 end
+  local room = PICK.maxCells - count - PICK.after
+  for n = 1, maxNo do
+    if used[n] then
+      nos[#nos + 1] = n
+    elseif room > 0 then
+      nos[#nos + 1] = n
+      room = room - 1
+    end
+  end
+  for n = maxNo + 1, last do nos[#nos + 1] = n end
+  return nos
+end
+
+-- Couleur de l'apparence d'un objet : la propriété Color de l'apparence
+-- (« 1.0,1.0,1.0,1.0 » dans l'export xml de Jo), valeurs 0..1 ou 0..255.
+local function parseColor(raw)
+  local t = {}
+  if type(raw) == "table" then
+    t = { tonumber(raw.r or raw[1]), tonumber(raw.g or raw[2]), tonumber(raw.b or raw[3]),
+          tonumber(raw.a or raw[4]) }
+  else
+    for x in tostring(raw):gmatch("[%d%.]+") do t[#t + 1] = tonumber(x) end
+  end
+  if not (t[1] and t[2] and t[3]) then return nil end
+  local a = t[4] or 1
+  local scale = (math.max(t[1], t[2], t[3], a) <= 1) and 255 or 1
+  local function c(x) return math.max(0, math.min(255, math.floor(x * scale + 0.5))) end
+  return c(t[1]), c(t[2]), c(t[3]), c(a)
+end
+
+local colorLogged = false
+local function appearanceColor(obj)
+  local app, raw
+  pcall(function() app = obj.appearance end)
+  if not app then return nil end
+  pcall(function() raw = app.Color end)
+  if raw == nil then pcall(function() raw = app:Get("Color") end) end
+  if raw == nil then return nil end
+  local r, g, b, a = parseColor(raw)
+  if not colorLogged then
+    colorLogged = true
+    local nm = ""
+    pcall(function() nm = tostring(app.name) end)
+    Printf("[SongCreator] apparence '" .. nm .. "' : Color = " .. tostring(raw)
+           .. " -> " .. tostring(r) .. "," .. tostring(g) .. "," .. tostring(b) .. "," .. tostring(a))
+  end
+  return r, g, b, a
+end
+
+-- Les cases prennent la couleur de l'apparence par une couleur ajoutée au
+-- thème MA (Global.SongCreator_rrggbbaa, comme la couleur ajoutée dans Tags
+-- UI Helper). Elles sont retirées à la fin du plugin.
+local THEME_PREFIX = "SongCreator_"
+local madeColors = {}
+local function themeColor(hex)
+  local key = THEME_PREFIX .. hex
+  if madeColors[key] ~= nil then return madeColors[key] or nil end
+  local c
+  local ok = pcall(function()
+    local glob = Root().ColorTheme.ColorGroups.Global
+    for _, x in ipairs(glob:Children()) do
+      if x.name == key then c = x end
+    end
+    if not c then
+      c = glob:Acquire()
+      c:Set("name", key)
+      c:Set("rgba", hex)
+    end
+  end)
+  madeColors[key] = (ok and c) or false
+  return madeColors[key] or nil
+end
+
+local function removeThemeColors()
+  local removed = 0
+  pcall(function()
+    local glob = Root().ColorTheme.ColorGroups.Global
+    for i = glob:Count(), 1, -1 do
+      local x = glob:Ptr(i)
+      local nm = x and tostring(x.name or "") or ""
+      if nm:sub(1, #THEME_PREFIX) == THEME_PREFIX then
+        glob:Delete(i)
+        removed = removed + 1
+      end
+    end
+  end)
+  madeColors = {}
+  if removed > 0 then Printf("[SongCreator] " .. removed .. " couleur(s) de liste retiree(s) du theme") end
+end
+
+local pickState = {}
+signalTable.SC_PickCell = function(caller) pickState.value = caller.SignalValue end
+
+local function pickWithScroll(poolName, current, block)
+  loadColors()
+  local used, maxNo, objs = readPool(poolName)
+  local nos = pickNumbers(used, maxNo)
+  local info = POOL_KIND[poolName] or { kind = poolName, icon = "object_plugin1" }
+  local display, dispW, dispH = pickDisplay()
+  local overlay = display.ScreenOverlay
+  local W = math.min(PICK.W, math.floor(dispW * 0.9))
+  local H = math.min(PICK.H, math.floor(dispH * 0.85))
+  local cols = math.max(1, math.floor((W - 60) / (PICK.cellW + PICK.gap)))
+  local base, nObj, nColor = nil, 0, 0
+  local paint = {}   -- cases à colorier, après le premier affichage de la liste
+
+  local okBuild, errBuild = pcall(function()
+    base = overlay:Append("BaseInput")
+    base.Name = "SongCreatorPick"
+    base.W, base.H = W, H
+    base.Columns, base.Rows = 1, 3
+    fixRow(base, 1, PICK.title)
+    base[1][2].SizePolicy = "Stretch"
+    fixRow(base, 3, PICK.foot)
+    opt(base, { AlignmentH = "Center", AlignmentV = "Center", AutoClose = "No", CloseOnEscape = "Yes" })
+
+    local tb = base:Append("TitleBar")
+    tb.Columns, tb.Rows = 2, 1
+    tb.Anchors = cell(0, 0)
+    fixCol(tb, 2, 50)
+    opt(tb, { Texture = "corner2" })
+    local tt = tb:Append("TitleButton")
+    tt.Text = "Select " .. info.kind
+    tt.Anchors = cell(0, 0)
+    opt(tt, { Texture = "corner1", Icon = info.icon, Font = UI.fontButton })
+    local close = tb:Append("CloseButton")
+    close.Anchors = cell(1, 0)
+    opt(close, { Texture = "corner2" })
+
+    -- cadre à 2 colonnes : la liste, puis la barre de défilement
+    local frame = base:Append("DialogFrame")
+    frame.H, frame.W, frame.Columns = "98%", "100%", 2
+    frame[2][2].SizePolicy = "Content"
+    frame.Anchors = cell(0, 1)
+
+    local box = frame:Append("ScrollBox")
+    box.Name = "SongCreatorPickBox"
+
+    local bar = frame:Append("ScrollBarV")
+    bar.ScrollTarget = "../SongCreatorPickBox"
+    bar.Anchors = "1,0"
+
+    for i, n in ipairs(nos) do
+      local col, row = (i - 1) % cols, math.floor((i - 1) / cols)
+      local b = box:Append("Button")
+      b.Anchors = "0,0"
+      b.W, b.H = PICK.cellW, PICK.cellH
+      b.X = 5 + col * (PICK.cellW + PICK.gap)
+      b.Y = 5 + row * (PICK.cellH + PICK.gap)
+      local fits = hasRoom(used, n, block)
+      if used[n] then
+        nObj = nObj + 1
+        local nm = used[n] ~= "" and used[n] or "?"
+        b.Text = n .. "  " .. nm
+        local r, g, bl, a = appearanceColor(objs[n])
+        if r then paint[#paint + 1] = { b = b, r = r, g = g, bl = bl, a = a, current = (n == current) } end
+      else
+        b.Text = n .. "  - libre -"
+        quiet(b, "TextColor", "Global.LabelText")
+      end
+      -- quiet : un refus ne doit pas écrire une ligne par case dans le System Monitor
+      quiet(b, "Font", UI.fontLabel)
+      quiet(b, "TextalignmentH", "Left")
+      quiet(b, "Padding", pad(8, 4, 0, 0))
+      quiet(b, "HasHover", "Yes")
+      if not used[n] and not fits then
+        -- pas la place pour la séquence et ses extras : grisé
+        quiet(b, "Enabled", "No")
+      else
+        b.PluginComponent = myHandle
+        b.Clicked = "SC_PickCell"
+        b.SignalValue = tostring(n)
+      end
+      if n == current then quiet(b, "TextColor", "Global.Selected") end
+    end
+
+    local txt = nObj .. " objets dans le pool, numéros 1 à " .. (nos[#nos] or 0)
+             .. (current and (", choix actuel : " .. current) or "")
+             .. ". Fais défiler avec la barre à droite."
+    if block > 1 then
+      txt = txt .. "  Grisé : pas la place pour la séquence et ses " .. (block - 1) .. " extras."
+    end
+    label(base, cell(0, 2), txt, { Font = UI.fontSmall, TextColor = "Global.LabelText",
+                                   Padding = pad(14, 8, 0, 0) })
+  end)
+  if not okBuild then
+    if base then closeWindow(overlay, base) end
+    return false, errBuild
+  end
+  Printf("[SongCreator] liste " .. poolName .. " affichee : " .. #nos .. " cases, " .. nObj .. " objets")
+
+  -- Couleurs des apparences posées une fois la liste affichée : si MA
+  -- n'aimait pas ces couleurs, on verrait la liste avant le problème.
+  coroutine.yield(0.1)
+  if #paint > 0 and IsObjectValid(base) then
+    pcall(function()
+      for _, p in ipairs(paint) do
+        local back = themeColor(string.format("%02x%02x%02x%02x", p.r, p.g, p.bl, p.a))
+        if back then
+          nColor = nColor + 1
+          quiet(p.b, "BackColor", back)
+          -- texte foncé sur une apparence claire (le choix actuel reste en jaune)
+          if not p.current and (0.299 * p.r + 0.587 * p.g + 0.114 * p.bl) > 150 and p.a > 128 then
+            local dark = themeColor("000000ff")
+            if dark then quiet(p.b, "TextColor", dark) end
+          end
+        end
+      end
+    end)
+    Printf("[SongCreator] liste " .. poolName .. " : " .. nColor .. " cases en couleur d'apparence")
+  end
+
+  -- attente du choix ; la croix ou Échap ferment sans rien changer
+  pickState.value = nil
+  local chosen
+  while IsObjectValid(base) do
+    coroutine.yield(0.05)
+    if pickState.value then
+      chosen = tonumber(pickState.value)
+      break
+    end
+  end
+  closeWindow(overlay, base)
+  return true, chosen
+end
+
+-- Choix d'un numéro dans un pool : la liste avec défilement, ou la liste
+-- native de MA si cette version refuse de construire la première.
+local function pickFromPool(poolName, title, current, block, caller)
+  local ok, res = pickWithScroll(poolName, current, block)
+  if ok then return res end
+  Printf("[SongCreator] liste avec defilement indisponible (" .. tostring(res) .. "), liste MA")
+  return pickWithPopupInput(poolName, title, current, block, caller)
+end
+
 local function readFields(w)
   local raw = w.fields.name.Content or ""
   local v = { rawName = raw, name = cleanName(raw), tcOn = w.tcOn }
@@ -1193,6 +1461,8 @@ local function Main(displayHandle, argument)
   local okV, ver = pcall(Version)
   Printf("[SongCreator] demarrage v" .. VERSION .. " sur grandMA3 " .. (okV and tostring(ver) or "?"))
   local ok, err = xpcall(RealMain, debug.traceback, displayHandle, argument)
+  -- couleurs de liste ajoutées au thème : retirées une fois les fenêtres fermées
+  if next(madeColors) then pcall(removeThemeColors) end
   if not ok then
     ErrPrintf("[SongCreator] ERREUR : " .. tostring(err))
     pcall(MessageBox, { title = "Song Creator - erreur", message = tostring(err),

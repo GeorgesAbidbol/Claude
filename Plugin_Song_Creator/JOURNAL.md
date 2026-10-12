@@ -39,6 +39,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.5.0 | fenêtre refaite avec les recettes de GUI REPLACE V15 de Jo (validé sur console) : `DialogFrame` pour le cadre et le fond, marges autour de chaque case, libellés sans fond à gauche des champs, titres de section, une ligne par emplacement avec son état (libre / occupé : « nom ») qui ouvre la liste, bouton Créer dans la couleur « Please » de MA, version à droite de la barre de titre, fenêtre 1300 x 760 (au plus 95 % de l'écran) |
 | 0.6.0 | test console de la 0.5.0 : « pas mal et fonctionnel ». Listes de pools refaites : fenêtre « Select ... » (`Popup` + `ScrollableItemList` en `PopupItemButtonExt`) avec l'apparence de chaque objet, barre de défilement (`ScrollBarV`) et filtre ; tous les objets du pool (400 séquences et plus), plus des numéros libres triés au milieu ; liste simple `PopupInput` en secours. Titre de la liste simple corrigé (« Select Select Sequence »). Logo banane de Jo dans la barre de titre (`AppearancePreview`) si le show a une apparence dont le nom contient « banane » |
 | 0.6.1 | test console de la 0.6.0 : affichage cassé, liste « Select ... » qui fait planter MA dès l'ouverture, logo banane absent. Jo : « laisse tomber » la banane, retour à la fenêtre d'avant (il a choisi la v0.5.0). Donc fenêtre v0.5.0 et liste native `PopupInput` (sans apparences) ; seul ajout gardé : titre des listes « Page », « Sequence »... pour que MA affiche « Select Sequence » |
+| 0.6.2 | test console de la 0.6.1 : la liste native `PopupInput` ne défile pas et ne propose que les objets et 12 numéros libres, impossible d'aller plus loin (séquences, macros, timecodes). Nouvelle liste « Select ... » : `BaseInput` + `DialogFrame` + `ScrollBox` + `ScrollBarV` (recette de Tags UI Helper de BakaCowpoke, CC0), une case `Button` par numéro (tous les numéros du pool, 30 après le dernier objet, au plus 1000 cases sauf objets), libres trop courts pour séquence + extras grisés, couleur de l'apparence posée après l'affichage via des couleurs ajoutées au thème (Global.SongCreator_rrggbbaa, retirées à la fin). `PopupInput` gardé en secours |
 
 ## Leçons apprises
 
@@ -105,6 +106,13 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
   `Icon` ; utiliser un `AppearancePreview` avec `Appearance = GetObject('Image 3.1')` (ou une apparence),
   `BackColor = 'Global.Transparent'`, `Interactive = 'No'`. Jo a fait l'apparence
   « [[LOGO Banane Vectorisé Blanc_png]] » (image `CUSTOM/LOGO Banane Vectorisé Blanc.png`).
+- **Liste native `PopupInput` (test 0.6.1, 12/10)** : marche, titre « Select Sequence » correct, mais pas
+  de barre de défilement ni d'apparences ; la popup se range en colonnes et s'arrête à ce qu'on lui donne.
+- **Recette de défilement publiée (BakaCowpoke, Tags UI Helper, CC0)** : `DialogFrame` à 2 colonnes
+  (`[2][2].SizePolicy = "Content"`), `ScrollBox` nommée, `ScrollBarV` avec `ScrollTarget = "../nom"`
+  (chemin texte, pas un handle comme en 0.6.0), enfants posés en `X`/`Y` avec `W`/`H`. Couleur sur
+  mesure : `Root().ColorTheme.ColorGroups.Global:Acquire()`, `Set("name")`, `Set("rgba", "rrggbbaa")`.
+- **Couleur d'une apparence** : propriété `Color` (« 1.0,1.0,1.0,1.0 », 0..1, vu dans l'export xml de Jo).
 - **Test console de la v0.6.0 (12/10)** : la liste `Popup` + `ScrollableItemList` fait **planter instantanément**
   à l'ouverture (flèches des pools) ; le logo banane (`AppearancePreview` dans la barre de titre) ne s'affiche
   pas et l'affichage est cassé. Jo : « laisse tomber » la banane, retour à la fenêtre d'avant et à la liste
@@ -128,10 +136,9 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 ## Reste à faire
 
-- Tester sur console la v0.6.1 (fenêtre v0.5.0, titre « Select Sequence »).
-- Demande de Jo (12/10) toujours ouverte : barre de défilement et apparences dans les listes de pools.
-  La liste native `PopupInput` n'affiche pas les apparences, la liste maison de la v0.6.0 a planté.
-  Ne pas la remettre dans le plugin : la tester d'abord dans un petit plugin séparé, sur onPC, avec l'accord de Jo.
+- Tester sur onPC puis console la v0.6.2 : liste des pools avec défilement et couleurs d'apparence.
+  Si elle plante, regarder si la liste est apparue avant (couleurs) ou non (ScrollBox / cases).
+- Pistes si la v0.6.2 marche : ouvrir la liste sur le numéro actuel (`ScrollDo`), filtre par nom.
 - Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
 - Question de Jo (11/10) : le plugin apporte-t-il plus que la macro ? Piste : gérer les songs existantes
