@@ -1,0 +1,363 @@
+# API Lua grandMA3 2.3 (aide-mémoire)
+
+Généré depuis `v2.3/data/grandMA3_lua_functions.json` (dump APIDump de patopesto, MA3 2.3.1.1 onPC).
+Une ligne par fonction : `Nom(arguments) -> retour`. Recherche rapide : `grep -i popupinput API_2.3.md`.
+
+## Fonctions sans objet (`Nom(...)`)
+
+- `AddFixtures({'mode'=light_userdata:dmx_mode, 'amount'=integer:amount[, 'undo'=string:undo_text][, 'parent'=light_userdata:handle][, 'insert_index'=integer:value][, 'idtype'=string:idtype][, 'cid'=string:cid][, 'fid'=string:fid][, 'name'=string:name][, 'layer'=string:layer][, 'class'=string:class][, 'patch'={table 1..8: string:address}]})` -> boolean:success or nothing
+- `AddonVars(string:addon_name)` -> light_userdata:addon_variables
+- `BuildDetails(nothing)` -> table:build_details
+- `CallRealtimeLockedProtected(function:name)` -> result of function
+- `ChannelTable(string:attribute_name or integer:attribute_index)` -> table of ui_channel_index
+- `CheckDMXCollision(light_userdata:dmx_mode, string:dmx_address[ ,integer:count[ ,integer:break_index]])` -> boolean:no_collision_found
+- `CheckFIDCollision(integer:fid[, integer:count[, integer:type]])` -> boolean:no_collision_found
+- `ClassExists(string:class_name)` -> boolean:result
+- `CloseAllOverlays(nothing)` -> nothing
+- `CloseMessageQueue(string:queue name)` -> boolean:success
+- `CloseUndo(light_userdata:undo_handle)` -> boolean:closed (true if was closed, false - if it's still in use)
+- `Cmd(string:formatted_command[ ,light_userdata:undo], ...)` -> string:command_execution_result ('Ok', 'Syntax Error', 'Illegal Command', ...)
+- `CmdIndirect(string:command[, light_userdata:undo[, light_userdata:target]])` -> nothing
+- `CmdIndirectWait(string:command[, light_userdata:undo[, light_userdata:target]])` -> nothing
+- `CmdObj(nothing)` -> light_userdata:handle
+- `ColMeasureDeviceDarkCalibrate(nothing)` -> integer:flag
+- `ColMeasureDeviceDoMeasurement(nothing)` -> table:values
+- `ConfigTable(nothing)` -> table:config_details
+- `Confirm([string:title [,string:message [,integer:display_index [,boolean:showCancel]]]])` -> boolean:result
+- `CopyFile(string:source_path, string:destination_path)` -> boolean:result
+- `CreateDirectoryRecursive(string:path)` -> boolean:result
+- `CreateMultiPatch({light_userdata:fixture_handles}, integer:count[ ,string:undo_text])` -> integer:amount_of_multi-patch_fixtures_created
+- `CreateUndo(string:undo_text)` -> light_userdata:undo_handle
+- `CurrentEnvironment(nothing)` -> light_userdata:handle
+- `CurrentExecPage(nothing)` -> light_userdata:handle
+- `CurrentProfile(nothing)` -> light_userdata:handle
+- `CurrentScreenConfig(nothing)` -> light_userdata:handle
+- `CurrentUser(nothing)` -> light_userdata:handle
+- `DataPool(nothing)` -> light_userdata:handle
+- `DefaultDisplayPositions(nothing)` -> light_userdata:handle
+- `DelVar(light_userdata:variables, string:varname)` -> boolean:success
+- `DeskLocked(nothing)` -> boolean:desk_is_locked
+- `DeviceConfiguration(nothing)` -> light_userdata:handle
+- `DevMode3d(nothing)` -> string:devmode3d
+- `DirList(string:path[ ,string:filter])` -> table of {name:string, size:int, time:int}
+- `DrawPointer(integer:display_index, {x=integer:x_position,y=integer:y_position}, integer:duration in ms))` -> nothing
+- `DumpAllHooks(nothing)` -> nothing
+- `Echo(string:formatted_command ...)` -> nothing
+- `ErrEcho(string:formatted_command ...)` -> nothing
+- `ErrPrintf(string:formatted_command ...)` -> nothing
+- `Export(string:file_name, table:export_data)` -> boolean:success
+- `ExportCSV(string:file_name, table:export_data)` -> boolean:success
+- `ExportJson(string:file_name, table:export_data)` -> boolean:success
+- `FileExists(string:path)` -> boolean:result
+- `FindBestDMXPatchAddr(light_userdata:patch, integer:starting_address, integer:footprint)` -> integer:absolute_address
+- `FindBestFocus([light_userdata:handle])` -> nothing
+- `FindNextFocus([bool:backwards(false)[, int(Focus::Reason):reason(UserTabKey)]])` -> nothing
+- `FindTexture(string:texture name)` -> light_userdata:handle to texture found
+- `FirstDmxModeFixture(light_userdata:dmxmode)` -> light_userdata:fixture
+- `FixtureType(nothing)` -> light_userdata:handle
+- `FromAddr(string:address[, light_userdata:base_handle])` -> light_userdata:handle
+- `FSExtendedModeHasDots(light_userdata:handle to UIGrid (or derived), {r, c}:cell)` -> boolean
+- `GetApiDescriptor(nothing)` -> table of {string:function_name, string:arguments, string:return_values}
+- `GetAttributeByUIChannel(integer:ui channel index)` -> light_userdata:reference_to_attribute
+- `GetAttributeColumnId(light_userdata:handle, light_userdata:attribute)` -> integer:column_id
+- `GetAttributeCount(nothing)` -> integer:attribute_count
+- `GetAttributeIndex(string:attribute_name)` -> integer:attribute_index
+- `GetBlockInput(nothing)` -> boolean:block_input
+- `GetButton(light_userdata:usb_device_object_handle)` -> table of boolean:state
+- `GetChannelFunction(integer:ui_channel_index, integer:attribute_index)` -> light_userdata:handle
+- `GetChannelFunctionIndex(integer:ui_channel_index, integer:attribute_index)` -> integer:channel_function_index
+- `GetClassDerivationLevel(string:class_name)` -> integer:result or nothing
+- `GetCurrentCue(nothing)` -> light_userdata:handle
+- `GetDebugFPS(nothing)` -> float:fps
+- `GetDisplayByIndex(integer:display_index)` -> light_userdata:display_handle
+- `GetDisplayCollect(nothing)` -> light_userdata:handle to DisplayCollect
+- `GetDMXUniverse(integer:universe[ ,boolean:modePercent])` -> {integer:dmx_values}
+- `GetDMXValue(integer:address[ ,integer:universe, boolean:mode_percent])` -> integer:dmx_value
+- `GetExecutor(integer:executor)` -> light_userdata:executor, light_userdata:page
+- `GetFocus(nothing)` -> light_userdata:display_handle
+- `GetFocusDisplay(nothing)` -> light_userdata:display_handle
+- `GetObjApiDescriptor(nothing)` -> table of {string:function_name, string:arguments, string:return_values}
+- `GetObject(string:address)` -> light_userdata:handle
+- `GetPath(string:path_type or integer:path_type(Enums.PathType)[ ,boolean:create])` -> string:path
+- `GetPathOverrideFor(string:path_type or integer:path_type(Enums.PathType), string:path[ ,boolean:create])` -> string:overwritten_path
+- `GetPathSeparator(nothing)` -> string:seperator
+- `GetPathType(light_userdata:target_object[ ,integer:content_type (Enums.PathContentType)])` -> string:path_type_name
+- `GetPresetData(light_userdata:preset_handle[, boolean:phasers_only(default=false)[, boolean:by_fixtures(default=true)]])` -> table:phaser_data
+- `GetProgPhaser(integer:ui_channel_index, boolean:phaser_only)` -> {['abs_preset'=light_userdata:handle], ['rel_preset'=light_userdata:handle], ['fade'=float:seconds], ['delay'=float:seconds], ['speed'=float:hz], ['phase'=float:degree], ['measure'=float:percent], ['gridpos'=integer:value], ['mask_active_phaser'=integer:bitmask], ['mask_active_value'=integer:bitmask], ['mask_individual'=integer:bitmask], {['channel_function'=integer:value], ['absolute'=float:percent], ['absolute_value'=integer:value], ['relative'=float:percent], ['accel'=float:percent[, 'accel_type'=integer:enum_value(Enums.SplineType)]], ['decel'=float:percent[, 'decel_type'=integer:enum_value(Enums.SplineType)]], ['trans'=float:percent], ['width'=float:percent], ['integrated'=light_userdata:preset_handle]}}
+- `GetProgPhaserValue(integer:ui_channel_index, integer:step)` -> {['channel_function'=integer:value], ['absolute'=number:percent], ['absolute_value'=number:value], ['relative'=number:percent], ['accel'=number:percent[, 'accel_type'=integer:enum_value(Enums.SplineType)]], ['decel'=number:percent[, 'decel_type'=integer:enum_value(Enums.SplineType)]], ['trans'=number:percent], ['width'=number:percent], ['integrated'=light_userdata:preset_handle]}
+- `GetPropertyColumnId(light_userdata:handle, string:property_name)` -> integer:column_id
+- `GetRemoteVideoInfo(nothing)` -> integer:wingID, boolean:isExtension
+- `GetRTChannel(integer:rt_channel_index)` -> table:rt_channel_descriptor
+- `GetRTChannelCount(nothing)` -> integer:rt_channel_count
+- `GetRTChannels(integer:fixture index or light_userdata: reference_to_fixture_object[, boolean:return_as_handles])` -> {integer:rt_channels} or {light_userdata:rt_channels}
+- `GetSample(string:type('MEMORY', 'CPU', 'CPUTEMP', 'GPUTEMP', 'SYSTEMP', 'FANRPM'))` -> integer:current_value_in_percent
+- `GetScreenContent(light_userdata:handle to ScreenConfig)` -> light_userdata:handle
+- `GetSelectedAttribute(nothing)` -> light_userdata:handle
+- `GetShowFileStatus(nothing)` -> string:showfile_status
+- `GetSubfixture(integer:subfixture_index)` -> light_userdata:subfixture
+- `GetSubfixtureCount(nothing)` -> integer:subfixture_count
+- `GetTextScreenLine(nothing)` -> integer:internal line number
+- `GetTextScreenLineCount([integer:starting internal line number])` -> integer:line count
+- `GetTokenName(string:short_name)` -> string:full_name
+- `GetTokenNameByIndex(integer:token_index)` -> string:full_name
+- `GetTopModal(nothing)` -> light_userdata:handle to top modal overlay
+- `GetTopOverlay(integer:display_index)` -> light_userdata:handle to top overlay on the display
+- `GetUIChannel(integer:ui_channel_index or light_userdata: subfixture_reference, integer:attribute_index or string:attribute_name)` -> table:ui_channel_descriptor
+- `GetUIChannelCount(nothing)` -> integer:ui_channel_count
+- `GetUIChannelIndex(integer:subfixture_index, integer:attribute_index)` -> integer:ui_channel_index
+- `GetUIChannels(integer:subfixture_index or light_userdata: subfixture_handle[, boolean:return_as_handles])` -> {integer:ui_channels} or {light_userdata:ui_channels}
+- `GetUIObjectAtPosition(integer:display_index, {x=integer:x_position,y=integer:y_position})` -> light_userdata:handle to UI object or nil
+- `GetVar(light_userdata:variables, string:varname)` -> value
+- `GetVarVersion(light_userdata:variables, string:varname)` -> integer:version
+- `GlobalVars(nothing)` -> light_userdata:global_variables
+- `HandleToInt(light_userdata:handle)` -> integer:handle
+- `HandleToStr(light_userdata:handle)` -> string:handle(in H#... format)
+- `HookObjectChange(function:callback, light_userdata:handle, light_userdata:plugin_handle[, light_userdata:target])` -> integer:hook_id
+- `HostOS(nothing)` -> string:ostype
+- `HostRevision(nothing)` -> string:hostrevision
+- `HostSubType(nothing)` -> string:hostsubtype
+- `HostType(nothing)` -> string:hosttype
+- `Import(string:file_name)` -> table:content
+- `IncProgress(integer:progressbar_index[, integer:delta])` -> nothing
+- `IntToHandle(integer:handle)` -> light_userdata:handle
+- `IsClassDerivedFrom(string:derived_name, string:base_name)` -> boolean:result
+- `IsObjectValid(light_userdata:handle)` -> boolean:valid
+- `Keyboard(integer:display_index, string:type('press', 'char', 'release')[ ,string:char(for type 'char') or string:keycode, boolean:shift, boolean:ctrl, boolean:alt, boolean:numlock])` -> nothing
+- `KeyboardObj(nothing)` -> light_userdata:handle
+- `LoadExecConfig(light_userdata:executor)` -> nothing
+- `MasterPool(nothing)` -> light_userdata:handle
+- `MessageBox({title:string,[, string:backColor][, integer:timeout (ms)][, boolean:timeoutResultCancel][, integer:timeoutResultID][, string:icon][, string:titleTextColor][, string:messageTextColor] [, boolean:autoCloseOnInput] string:message[, integer:message_align_h(Enums.AlignmentH)][, integer:message_align_v(Enums.AlignmentV)][, integer|lightuserdata:display], commands:{array of {integer:value, string:name[, integer:order]}}, inputs:{array of {string:name, string:value, string:blackFilter, string:whiteFilter, string:vkPlugin, integer:maxTextLength[, integer:order]}}, states:{array of {string:name, boolean:state[, integer:order]}, selectors:{array of {name:string, integer:selectedValue, values:table[, type:integer 0-swipe, 1-radio][, integer:order]} })` -> {boolean:success, integer:result, inputs:{array of [string:name] = string:value}, states:{array of [string:name] = boolean:state}, selectors:{array of [string:name] = integer:selected-value}}
+- `Mouse(integer:display_index, string:type('press', 'move', 'release')[ ,string:button('Left', 'Middle', 'Right' for 'press', 'release') or integer:abs_x, integer:abs_y)])` -> nothing
+- `MouseObj(nothing)` -> light_userdata:handle
+- `NeedShowSave(nothing)` -> boolean:need_show_save
+- `NextDmxModeFixture(light_userdata:fixture)` -> light_userdata:fixture
+- `ObjectList(string:address[, {['selected_as_default'=boolean:enabled], ['reverse_order'=boolean:enabled]})` -> {light_userdata:handles}
+- `OpenMessageQueue(string:queue name)` -> boolean:success
+- `OverallDeviceCertificate(nothing)` -> light_userdata:handle
+- `Patch(nothing)` -> light_userdata:handle
+- `PluginVars([string:plugin_name])` -> light_userdata:plugin_preferences
+- `PopupInput({title:str, caller:handle, items:table:{{'str'|'int'|'lua'|'handle', name, type-dependent}...}, selectedValue:str, x:int, y:int, target:handle, render_options:{left_icon, number, right_icon}, useTopLeft:bool, properties:{prop:value}, add_args:{FilterSupport='Yes'/'No'}})` -> integer:selected_index, string:selected_value
+- `PrepareWaitObjectChange(light_userdata:handle[ ,integer:change_level_threshold])` -> boolean:true or nothing
+- `Printf(string:formatted_command ...)` -> nothing
+- `Programmer(nothing)` -> light_userdata:handle
+- `ProgrammerPart(nothing)` -> light_userdata:handle
+- `Pult(nothing)` -> light_userdata:handle
+- `RefreshLibrary(light_userdata:handle)` -> nothing
+- `ReleaseType(nothing)` -> string:releasetype
+- `RemoteCallRunning(nothing)` -> boolean:remotecall_is_running
+- `RemoteCommand(string:ip, string:command)` -> boolean:success
+- `Root(nothing)` -> light_userdata:handle
+- `SaveExecConfig(light_userdata:executor)` -> nothing
+- `SelectedDrive(nothing)` -> light_userdata:handle
+- `SelectedFeature(nothing)` -> light_userdata:handle
+- `SelectedLayout(nothing)` -> light_userdata:handle
+- `SelectedSequence(nothing)` -> light_userdata:handle
+- `SelectedTimecode(nothing)` -> light_userdata:handle
+- `SelectedTimer(nothing)` -> light_userdata:handle
+- `Selection(nothing)` -> light_userdata:handle
+- `SelectionComponentX(nothing)` -> integer:min, integer:max, integer:index, integer:block, integer:group
+- `SelectionComponentY(nothing)` -> integer:min, integer:max, integer:index, integer:block, integer:group
+- `SelectionComponentZ(nothing)` -> integer:min, integer:max, integer:index, integer:block, integer:group
+- `SelectionCount(nothing)` -> integer:amount_of_selected_subfixtures
+- `SelectionFirst(nothing)` -> integer:first_subfixture_index, integer:x, integer:y, integer:z
+- `SelectionNext(integer:current_subfixture_index)` -> integer:next_subfixture_index, integer:x, integer:y, integer:z
+- `SelectionNotifyBegin(light_userdata:associated_context)` -> nothing
+- `SelectionNotifyEnd(light_userdata:associated_context)` -> nothing
+- `SelectionNotifyObject(light_userdata:object_to_notify_about)` -> nothing
+- `SelectionTable(nothing)` -> table of subfixture_index
+- `SendLuaMessage(string:ip/station, string:channel name, table:data)` -> boolean:success
+- `SerialNumber(nothing)` -> string:serialnumber
+- `SetBlockInput(boolean:block[, boolean:show_info])` -> nothing
+- `SetColor(string:color_model('RGB', 'xyY', 'Lab', 'XYZ', 'HSB'), float:tripel1, float:tripel2, float:tripel3, float:brightness, float:quality, boolean:const_brightness)` -> integer:flag
+- `SetLED(light_userdata:usb_device_object_handle, table:led_values)` -> nothing
+- `SetProgPhaser(integer:ui_channel_index, {['abs_preset'=light_userdata:handle], ['rel_preset'=light_userdata:handle], ['fade'=number:seconds], ['delay'=number:seconds], ['speed'=number:hz], ['phase'=number:degree], ['measure'=number:percent], ['gridpos'=integer:value], {['channel_function'=integer:value], ['absolute'=number:percent], ['absolute_value'=integer:value], ['relative'=number:percent], ['accel'=number:percent[, 'accel_type'=integer:enum_value(Enums.SplineType)]], ['decel'=number:percent[, 'decel_type'=integer:enum_value(Enums.SplineType)]], ['trans'=number:percent], ['width'=number:percent], ['integrated'=light_userdata:preset_handle]}})` -> nothing
+- `SetProgPhaserValue(integer:ui_channel_index, integer:step, {['channel_function'=integer:value], ['absolute'=number:percent], ['absolute_value'=integer:value], ['relative'=number:percent], ['accel'=number:percent[, 'accel_type'=integer:enum_value(Enums.SplineType)]], ['decel'=number:percent[, 'decel_type'=integer:enum_value(Enums.SplineType)]], ['trans'=number:percent], ['width'=number:percent], ['integrated'=light_userdata:preset_handle]})` -> nothing
+- `SetProgress(integer:progressbar_index, integer:value)` -> nothing
+- `SetProgressRange(integer:progressbar_index, integer:start, integer:end)` -> nothing
+- `SetProgressText(integer:progressbar_index, string:text)` -> nothing
+- `SetVar(light_userdata:variables, string:varname, value)` -> boolean:success
+- `ShowData(nothing)` -> light_userdata:handle
+- `ShowSettings(nothing)` -> light_userdata:handle
+- `StartProgress(string:name)` -> integer:progressbar_index
+- `StopProgress(integer:progressbar_index)` -> nothing
+- `StrToHandle(string:handle(in H#... format))` -> light_userdata:handle
+- `SyncFS(nothing)` -> nothing
+- `TextInput([string:title[, string:value[, integer:x[, integer:y]]]])` -> string:value
+- `Time(nothing)` -> integer:time
+- `Timer(function:timer_function, integer:delay_time, integer:max_count[, function:cleanup][, light_userdata:context object])` -> nothing
+- `ToAddr(light_userdata:handle, boolean:with_name[, boolean:use_visible_addr])` -> string:address
+- `Touch(integer:display_index, string:type('press', 'move', 'release'), integer:touch_id, integer:abs_x, integer:abs_y)` -> nothing
+- `TouchObj(nothing)` -> light_userdata:handle
+- `Unhook(integer:hook_id)` -> nothing
+- `UnhookMultiple(function:callback(can be nil), light_userdata:handle to target(can be nil), light_userdata:handle to context (can be nil))` -> integer:amount of removed hooks
+- `UserVars(nothing)` -> light_userdata:user_variables
+- `Version(nothing)` -> string:version
+- `WaitModal([number:seconds to wait])` -> handle to modal overlay or nil on failure(timeout)
+- `WaitObjectDelete(light_userdata:handle to UIObject[, number:seconds to wait])` -> boolean:true on success, nil on timeout
+
+## Fonctions d'objet (`obj:Nom(...)`, le 1er argument est l'objet)
+
+- `Acquire(light_userdata:handle[, string:class[, light_userdata:undo]])` -> light_userdata:child_handle
+- `AddListChildren(light_userdata:handle, light_userdata:parent[, enum{Roles}:role])` -> nothing
+- `AddListChildrenNames(light_userdata:handle, light_userdata:parent[, enum{Roles}:role])` -> nothing
+- `AddListLuaItem(light_userdata:handle, string:name, string:value/function name, lua_function:callback reference[, <any lua type>:argument to pass to callback[, {[left={...}][right={...}]}:appearance]])` -> nothing
+- `AddListLuaItems(light_userdata:handle, table{item={[1]=name, [2]=value/function name, [3]=callback reference[, [4]=argument of any lua type to pass to callback]}, ...})` -> nothing
+- `AddListNumericItem(light_userdata:handle, string:name, number:value[,light_userdata:base handle[, {[left={...}][right={...}]}:appearance]])` -> nothing
+- `AddListNumericItems(light_userdata:handle, table{item={[1]=name, [2]=integer:value}, ...})` -> nothing
+- `AddListObjectItem(light_userdata:handle, light_userdata:target object[, (string: explicit name[, {[boolean:appearance],[left={...}][right={...}]}:appearance] | enum{Roles}: role [, :boolean: extended_name[, {[left={...}][right={...}]}:appearance],[string:postNameText])])` -> nothing
+- `AddListPropertyItem(light_userdata:handle, string:name, string:value, light_userdata:target handle[,{[left={...}][right={...}]}:appearance])` -> nothing
+- `AddListPropertyItems(light_userdata:handle, table{item={[1]=name, [2]=property name, [3]=target handle}, ...})` -> nothing
+- `AddListRecursiveNames(light_userdata:handle, light_userdata:parent[, enum{Roles}:role])` -> nothing
+- `AddListStringItem(light_userdata:handle, string:name, string:value[, {[left={...}][right={...}]}:appearance])` -> nothing
+- `AddListStringItems(light_userdata:handle, table{item={[1]=name, [2]=value}, ...})` -> nothing
+- `Addr(light_userdata:handle[, light_userdata:base_handle[, boolean:force_parent-based_address[, boolean:force_commandline_index-based_address]]])` -> string:numeric_root_address
+- `AddrNative(light_userdata:handle, light_userdata:base_handle[, boolean:escape_names]])` -> string:numeric_root_address
+- `Append(light_userdata:handle[, string:class[, light_userdata:undo[, integer:count]]])` -> light_userdata:child_handle
+- `Aquire(light_userdata:handle[, string:class[, light_userdata:undo]])` -> light_userdata:child_handle
+- `Changed(light_userdata:handle, string:change_level_enum_name)` -> nothing
+- `Children(light_userdata:handle)` -> {light_userdata:child_handles}
+- `ClearList(light_userdata:handle)` -> nothing
+- `ClearUIChildren(light_userdata:handle to UIObject)` -> nothing
+- `CmdlineChildren(light_userdata:handle)` -> {light_userdata:child_handles}
+- `CmdlinePtr(light_userdata:handle, integer:index(1-based))` -> light_userdata:child_handle
+- `CommandAt(light_userdata:handle)` -> nothing
+- `CommandCall(light_userdata:handle, light_userdata:dest_handle, boolean:focus_search_allowed(default:true))` -> nothing
+- `CommandCreateDefaults(light_userdata:handle)` -> nothing
+- `CommandDelete(light_userdata:handle)` -> nothing
+- `CommandStore(light_userdata:handle)` -> nothing
+- `Compare(light_userdata:handle, light_userdata:handle)` -> boolean:is_equal, string:what_differs
+- `Copy(light_userdata:dst_handle, light_userdata:src_handle[, light_userdata:undo])` -> nothing
+- `Count(light_userdata:handle)` -> integer:child_count
+- `Create(light_userdata:handle, integer:child_index(1-based)[, string:class[, light_userdata:undo]])` -> light_userdata:child_handle
+- `CurrentChild(light_userdata:handle)` -> light_userdata:current_child or nothing
+- `Delete(light_userdata:handle, integer:child_index(1-based)[, light_userdata:undo])` -> nothing
+- `Dump(light_userdata:handle)` -> string:information
+- `Export(light_userdata:handle, string:file_path, string:file_name)` -> boolean:success
+- `Find(light_userdata:search_start_handle, string:search_name[, string:search_class_name])` -> light_userdata:found_handle
+- `FindListItemByName(light_userdata:handle, string:value)` -> integer:1-based index
+- `FindListItemByValueStr(light_userdata:handle, string:value)` -> integer:1-based index
+- `FindParent(light_userdata:search_start_handle, string:search_class_name)` -> light_userdata:found_handle
+- `FindRecursive(light_userdata:search_start_handle, string:search_name[, string:search_class_name])` -> light_userdata:found_handle
+- `FindWild(light_userdata:search_start_handle, string:search_name)` -> light_userdata:found_handle
+- `FSExtendedModeHasDots(light_userdata:handle to UIGrid (or derived), {r, c}:cell)` -> boolean
+- `Get(light_userdata:handle, string:property_name[, integer:role(Enums.Roles)])` -> light:userdata:child or string:property (if 'role' provided - always string)
+- `GetAssignedObj(light_userdata:handle)` -> light_userdata:handle
+- `GetChildClass(light_userdata:handle)` -> string:class_name
+- `GetClass(light_userdata:handle)` -> string:class_name
+- `GetDependencies(light_userdata:handle)` -> {light_userdata:handle}
+- `GetDisplay(light_userdata:handle to UIObject)` -> light_userdata:display_handle
+- `GetDisplayIndex(light_userdata:handle to UIObject)` -> integer:display_index
+- `GetExportFileName(light_userdata:handle[, boolean:camel_case_to_file_name])` -> string:file_name
+- `GetFader(light_userdata:handle, {[string:token(Fader*)], [integer:index]})` -> float:value[0..100]
+- `GetFaderText(light_userdata:handle, {[string:token(Fader*)], [integer:index]})` -> string:text
+- `GetLineAt(light_userdata:handle, integer:line_number)` -> string:line_content
+- `GetLineCount(light_userdata:handle)` -> integer:count
+- `GetListItemAdditionalInfo(light_userdata:handle, integer:index)` -> string:value
+- `GetListItemAppearance(light_userdata:handle, integer:index)` -> {left={AppearanceData}, right={AppearanceData}}
+- `GetListItemButton(light_userdata:handle, integer:index)` -> light_userdata:button or nil if not visible
+- `GetListItemName(light_userdata:handle, integer:index)` -> string:name
+- `GetListItemsCount(light_userdata:handle)` -> integer:amount of items in the list
+- `GetListItemValueI64(light_userdata:handle, integer:index)` -> integer:value
+- `GetListItemValueStr(light_userdata:handle, integer:index)` -> string:value
+- `GetListSelectedItemIndex(light_userdata:handle)` -> integer:1-based index
+- `GetOverlay(light_userdata:handle to UIObject)` -> light_userdata:overlay_handle
+- `GetReferences(light_userdata:handle)` -> {light_userdata:handle}
+- `GetScreen(light_userdata:handle to UIObject)` -> light_userdata:handle
+- `GetUIChild(light_userdata:handle to UIObject, integer:index(1-based))` -> light_userdata:handle to UIObject
+- `GetUIChildrenCount(light_userdata:handle to UIObject)` -> integer:count
+- `GetUIEditor(light_userdata:handle)` -> string:ui_editor_name
+- `GetUISettings(light_userdata:handle)` -> string:ui_settings_name
+- `GridCellExists(light_userdata:handle to UIGrid (or derived), {r, c}:cell)` -> boolean
+- `GridGetBase(light_userdata:handle to UIGrid (or derived))` -> light_userdata:handle to GridBase
+- `GridGetCellData(light_userdata:handle to UIGrid (or derived), {r, c}:cell)` -> {text, color={text, back}}
+- `GridGetCellDimensions(light_userdata:handle to UIGrid (or derived), {r, c}:cell)` -> {x, y, w, h}
+- `GridGetData(light_userdata:handle to UIGrid (or derived))` -> light_userdata:handle to GridData
+- `GridGetDimensions(light_userdata:handle to UIGrid (or derived))` -> {r, c}
+- `GridGetParentRowId(light_userdata:handle to UIGrid (or derived), integer: rowId)` -> parent row id (integer) or nil (if there's no parent)
+- `GridGetScrollCell(light_userdata:handle to UIGrid (or derived))` -> {r, c}
+- `GridGetScrollOffset(light_userdata:handle to UIGrid (or derived))` -> {v = {index, offset}, h={index, offset}}
+- `GridGetSelectedCells(light_userdata:handle to UIGrid (or derived))` -> array of {r, c, r_UniqueId, r_GroupId, c_UniqueId, c_GroupId} cells in the selection
+- `GridGetSelection(light_userdata:handle to UIGrid (or derived))` -> light_userdata:handle to GridSelection
+- `GridGetSettings(light_userdata:handle to UIGrid (or derived))` -> light_userdata:handle to GridSettings
+- `GridIsCellReadOnly(light_userdata:handle to UIGrid (or derived), {r, c}:cell)` -> boolean
+- `GridIsCellVisible(light_userdata:handle to UIGrid (or derived), {r, c}:cell)` -> boolean
+- `GridMoveSelection(light_userdata:handle to UIGrid (or derived), x, y)` -> nothing
+- `GridScrollCellIntoView(light_userdata:handle to UIGrid (or derived), {r, c}:cell)` -> nothing
+- `GridSetColumnSize(light_userdata:handle to UIGrid (or derived), integer: columnId, integer:size in pixels)` -> nothing
+- `GridsGetColumnById(light_userdata:handle to UIGrid (or derived), integer: columnId)` -> column index or nil (if there's no such visible column)
+- `GridsGetExpandHeaderCell(light_userdata:handle to UIGrid (or derived))` -> {r, c} or nil
+- `GridsGetExpandHeaderCellState(light_userdata:handle to UIGrid (or derived))` -> boolean or nil
+- `GridsGetLevelButtonWidth(light_userdata:handle to UIGrid (or derived), {r, c}:cell)` -> width in pixels or nil
+- `GridsGetRowById(light_userdata:handle to UIGrid (or derived), integer: rowId)` -> row index or nil (if there's no such visible row)
+- `HasActivePlayback(light_userdata:handle)` -> boolean:result
+- `HasDependencies(light_userdata:handle)` -> boolean:result
+- `HasEditSettingUI(light_userdata:handle)` -> boolean:result
+- `HasEditUI(light_userdata:handle)` -> boolean:result
+- `HasParent(light_userdata:handle, handle:object_to_check)` -> nothing
+- `HasReferences(light_userdata:handle)` -> boolean:result
+- `HookDelete(light_userdata:handle to UIObject, function:callback to invoke on deletion[, any:argument to pass by])` -> boolean:true on success, nil on failure
+- `Import(light_userdata:handle, string:file_path, string:file_name)` -> boolean:success
+- `Index(light_userdata:handle)` -> integer:index
+- `InputCallFunction(light_userdata:handle, string:function name[, ...parameters to function])` -> <depends on function>
+- `InputHasFunction(light_userdata:handle, string:function name)` -> true or nil
+- `InputRun(light_userdata:handle)` -> nothing
+- `InputSetAdditionalParameter(light_userdata:handle, string:parameter name, string:parameter value)` -> nothing
+- `InputSetEditTitle(light_userdata:handle, string:name_value)` -> nothing
+- `InputSetMaxLength(light_userdata:handle, integer:length)` -> nothing
+- `InputSetTitle(light_userdata:handle, string:name_value)` -> nothing
+- `InputSetValue(light_userdata:handle, string:value)` -> nothing
+- `Insert(light_userdata:handle, integer:child_index(1-based)[, string:class[, light_userdata:undo[, integer:count]]])` -> light_userdata:child_handle
+- `IsClass(light_userdata:handle)` -> boolean:result
+- `IsEmpty(light_userdata:handle)` -> boolean:object_is_empty
+- `IsEnabled(light_userdata:handle to UIObject)` -> bool:is enabled
+- `IsListItemEmpty(light_userdata:handle, integer:index)` -> nothing
+- `IsListItemEnabled(light_userdata:handle, integer:index)` -> nothing
+- `IsLocked(light_userdata:handle)` -> boolean:object_is_locked
+- `IsValid(light_userdata:handle)` -> boolean:result
+- `IsVisible(light_userdata:handle to UIObject)` -> bool:is visible
+- `Load(light_userdata:handle, string:file_path, string:file_name)` -> boolean:success
+- `MaxCount(light_userdata:handle)` -> integer:child_count
+- `OverlaySetCloseCallback(light_userdata:handle to Overlay, callbackName:string[, ctx:anything])` -> nothing
+- `Parent(light_userdata:handle)` -> light_userdata:parent_handle
+- `PrepareAccess(light_userdata:handle)` -> nothing
+- `PropertyCount(light_userdata:handle)` -> integer:property_count
+- `PropertyInfo(light_userdata:handle, integer:property_index)` -> {'ReadOnly'=boolean:read_only_flag, 'ExportIgnore'=boolean:export_ignore_flag, 'ImportIgnore'=boolean:import_ignore_flag, 'EnumCollection'=string:enum_collection_name}
+- `PropertyName(light_userdata:handle, integer:property_index)` -> string:property_name
+- `PropertyType(light_userdata:handle, integer:property_index)` -> string:property_type
+- `Ptr(light_userdata:handle, integer:index(1-based))` -> light_userdata:child_handle
+- `Remove(light_userdata:handle, integer:child_index(1-based)[, light_userdata:undo])` -> nothing
+- `RemoveListItem(light_userdata:handle, string:name)` -> nothing
+- `Resize(light_userdata:handle, integer:size)` -> nothing
+- `Save(light_userdata:handle, string:file_path, string:file_name)` -> boolean:success
+- `ScrollDo(light_userdata:handle, integer:scroll type (see 'ScrollType' enum), integer:scroll entity (item or area, see 'ScrollParamEntity' enum), integer:value type (absolute or relative, see 'ScrollParamValueType' enum), number: value to scroll (items - 1-based), boolean: updateOpposite side)` -> boolean:true scroll
+- `ScrollGetInfo(light_userdata:handle, integer:scroll type (see 'ScrollType' enum))` -> {index(1-based), offset, visibleArea, totalArea, itemsCount, itemsOnPage} or nil
+- `ScrollGetItemByOffset(light_userdata:handle, integer:scroll type (see 'ScrollType' enum), integer:offset)` -> integer:1-based item index
+- `ScrollGetItemOffset(light_userdata:handle, integer:scroll type (see 'ScrollType' enum), integer:1-based item idx)` -> integer:offset of the item or nil
+- `ScrollGetItemSize(light_userdata:handle, integer:scroll type (see 'ScrollType' enum), integer:1-based item idx)` -> integer:size of the item of nil
+- `ScrollIsNeeded(light_userdata:handle, integer:scroll type (see 'ScrollType' enum))` -> boolean:true if scroll of the requested type is needed
+- `SelectListItemByIndex(light_userdata:handle, integer:index(1-based))` -> nothing
+- `SelectListItemByName(light_userdata:handle, string:name_value)` -> nothing
+- `SelectListItemByValue(light_userdata:handle, string:value)` -> nothing
+- `Set(light_userdata:handle, string:property_name, string:property_value[, integer:override_change_level(Enums.ChangeLevel)])` -> nothing
+- `SetChildren(light_userdata:handle_of_parent, string:property_name, string:property_value[, boolean:recursive (default: false)])` -> nothing
+- `SetChildrenRecursive(light_userdata:handle_of_parent, string:property_name, string:property_value[, boolean:recursive (default: false)])` -> nothing
+- `SetContextSensHelpLink(light_userdata:handle to UIObject, string:topic name)` -> nothing
+- `SetEmptyListItem(light_userdata:handle, integer:index[, bool:empty(default:true)])` -> nothing
+- `SetEnabledListItem(light_userdata:handle, integer:index[, bool:enable(default:true)])` -> nothing
+- `SetFader(light_userdata:handle, {[float:value[0..100]], [boolean:faderEnabled], [string:token(Fader*)]})` -> nothing
+- `SetListItemAdditionalInfo(light_userdata:handle, integer:index, string:value)` -> nothing
+- `SetListItemAppearance(light_userdata:handle, integer:index, {[left={...AppearanceData...}][right={...AppearanceData...}]})` -> nothing
+- `SetListItemName(light_userdata:handle, integer:index, string:name)` -> nothing
+- `SetListItemValueStr(light_userdata:handle, integer:index, string:value)` -> nothing
+- `SetPositionHint(light_userdata:handle, integer:x, integer:y)` -> nothing
+- `ShowModal(light_userdata:handle, callback:function)` -> nothing
+- `ToAddr(light_userdata:handle,boolean:with_name[, boolean:use_visible_addr])` -> string:address
+- `UIChildren(light_userdata:handle to UIObject)` -> {light_userdata:child_handles}
+- `UILGGetColumnAbsXLeft(light_userdata:handle to UILayoutGrid, integer:index)` -> integer:x
+- `UILGGetColumnAbsXRight(light_userdata:handle to UILayoutGrid, integer:index)` -> integer:x
+- `UILGGetColumnWidth(light_userdata:handle to UILayoutGrid, integer:index)` -> integer:size
+- `UILGGetRowAbsYBottom(light_userdata:handle to UILayoutGrid, integer:index)` -> integer:y
+- `UILGGetRowAbsYTop(light_userdata:handle to UILayoutGrid, integer:index)` -> integer:y
+- `UILGGetRowHeight(light_userdata:handle to UILayoutGrid, integer:index)` -> integer:size
+- `WaitChildren(light_userdata:handle to UIObject, integer:expected amount of children[, number:seconds to wait])` -> boolean:true on success, nil on timeout or if object doesn't exist
+- `WaitInit(light_userdata:handle to UIObject[, number:seconds to wait[, bool:force to re-init, default - false]])` -> boolean:true on success, nil on timeout or if object doesn't exist

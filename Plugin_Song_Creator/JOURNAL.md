@@ -1,0 +1,189 @@
+# Journal du projet Plugin Song Creator
+
+Trace des décisions, des versions et des leçons apprises, pour reprendre le projet plus tard.
+Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
+
+## Décisions de Jo (10/10/2026)
+
+| Sujet | Décision |
+|---|---|
+| Version MA3 | le plugin doit tourner en 2.3.2.0 |
+| Timecode | le plugin le crée ; les cues 0.6 / 0.7 / Off TC reçoivent leur commande |
+| Commandes TC | par le **nom** du timecode entre guillemets : `Go+ Timecode "Nom"` |
+| Espaces | **tous les espaces deviennent `_`** (page, séquences, timecode, macro) |
+| Extras | placées juste après la séquence main, on ne saisit que leur nombre (max 10, Exec 121-130) |
+| Cues de song | nombre réglable (20 par défaut), à affiner avec le futur plugin de link Reaper |
+| Notes | toutes les séquences de la song (main + extras) reçoivent une note au nom de la song |
+| Écran | le plugin s'ouvre **sur l'écran 1** uniquement |
+| Fenêtre | une seule fenêtre : déplaçable par la barre de titre, redimensionnable, croix pour fermer |
+| Choix dans les pools | Page, Macro, Séquence, Timecode : taper le numéro **ou** ouvrir la fenêtre de sélection **native** de MA (style « Select Selection »), pas une fenêtre dessinée à part |
+| Inspiration visuelle | SongMAnager de MATools (ma.tools) |
+| Modes (12/10) | Renommer, Dupliquer, Supprimer : une song = page + séquence du même nom ; extras = séquences suivantes avec ce nom en note ; timecode et macro du même nom |
+| Pool Tag (12/10) | une ligne **Tag** (numéro + liste ▾) comme Séquence, Timecode, Macro ; réglage **Poser le tag Oui / Non** ; Dupliquer et Supprimer vérifient aussi les objets de la song par leur tag |
+| Note et tag (12/10) | la note au nom de la song sur **tous** les objets créés (page, séquences, timecode, macro) ; **un tag par song** posé sur tous ses objets (« le tag est très puissant, pour d'autres plugins cela pourrait nous servir ») |
+| Dupliquer le timecode (12/10) | « Oui, tout copier » : copier le timecode entier puis « changer les liens des events trigés » vers la copie |
+
+## Versions
+
+| Version | Contenu |
+|---|---|
+| 0.1.0 | MessageBox de setup, récapitulatif, création complète (reprise de la macro + timecode) |
+| 0.1.1 | listes déroulantes (PopupInput) pour Page, Macro, Timecode |
+| 0.1.2 | liste pour la séquence main, avec contrôle de la place pour les extras |
+| 0.2.0 | grille de tuiles dessinée façon Import/Export, liste en secours |
+| 0.2.1 | taille relative à l'écran, écran 1 ou 2 |
+| 0.2.2 | journal `[SongCreator]` dans le System Monitor, erreurs Lua affichées |
+| 0.3.0 | fenêtre unique sur mesure (écran 1, déplaçable, redimensionnable, croix), récap en direct, boutons « ... » vers la sélection native MA, boîtes MA en secours |
+| 0.3.1 | relecture avec les docs : retour des commandes vérifié (refus listés), création dans une seule action Oops, lignes de macro créées par `Store Macro N.i` puis remplies en Lua, `ClassExists` avant le coin de redimensionnement, version MA écrite au démarrage |
+| 0.3.2 | test console du 11/10 : la commande des cues TC est écrite sur la part 0 de la cue (la cue refusait « Command »), chaque valeur posée en Lua est relue, propriétés listées dans le System Monitor si ça échoue |
+| 0.3.3 | une couleur par cue et LAVENDER sur 0.5 : fausse piste, retirée en 0.3.4 (il manquait juste l'apparence LAVENDER dans le show de test) |
+| 0.3.4 | retour à la ligne de couleur d'origine ; si une apparence manque dans le show, la liste native des apparences s'ouvre à la création pour en choisir une, et le choix est gardé dans une variable globale du show (`SongCreator_App_main`, `_extras`, `_tc`, `_bo`) |
+| 0.4.0 | nouvelle fenêtre d'après la maquette v0.4 (modèle « Search and Modify ») : modes à gauche (Créer ; Renommer, Dupliquer, Supprimer grisés), emplacements avec flèche ▾ vers la sélection native, réglages, bouton Oui / Non pour le timecode, récap « Ce qui sera créé » et alertes en couleur à droite, cases occupées en orange (avec le nom de l'objet), boutons Créer / Valeurs par défaut / Annuler ; lignes de hauteur fixe et polices plus grandes |
+| 0.4.1 | retours console de la 0.4.0 : fenêtre de départ agrandie (1400 x 600), cases des emplacements plus larges (les numéros étaient masqués), icônes des boutons placées à gauche du texte ou retirées si MA ne sait pas les décaler, plus d'icône sur le bouton Oui / Non, lignes du récap raccourcies |
+| 0.5.0 | fenêtre refaite avec les recettes de GUI REPLACE V15 de Jo (validé sur console) : `DialogFrame` pour le cadre et le fond, marges autour de chaque case, libellés sans fond à gauche des champs, titres de section, une ligne par emplacement avec son état (libre / occupé : « nom ») qui ouvre la liste, bouton Créer dans la couleur « Please » de MA, version à droite de la barre de titre, fenêtre 1300 x 760 (au plus 95 % de l'écran) |
+| 0.6.0 | test console de la 0.5.0 : « pas mal et fonctionnel ». Listes de pools refaites : fenêtre « Select ... » (`Popup` + `ScrollableItemList` en `PopupItemButtonExt`) avec l'apparence de chaque objet, barre de défilement (`ScrollBarV`) et filtre ; tous les objets du pool (400 séquences et plus), plus des numéros libres triés au milieu ; liste simple `PopupInput` en secours. Titre de la liste simple corrigé (« Select Select Sequence »). Logo banane de Jo dans la barre de titre (`AppearancePreview`) si le show a une apparence dont le nom contient « banane » |
+| 0.6.1 | test console de la 0.6.0 : affichage cassé, liste « Select ... » qui fait planter MA dès l'ouverture, logo banane absent. Jo : « laisse tomber » la banane, retour à la fenêtre d'avant (il a choisi la v0.5.0). Donc fenêtre v0.5.0 et liste native `PopupInput` (sans apparences) ; seul ajout gardé : titre des listes « Page », « Sequence »... pour que MA affiche « Select Sequence » |
+| 0.6.2 | test console de la 0.6.1 : la liste native `PopupInput` ne défile pas et ne propose que les objets et 12 numéros libres, impossible d'aller plus loin (séquences, macros, timecodes). Nouvelle liste « Select ... » : `BaseInput` + `DialogFrame` + `ScrollBox` + `ScrollBarV` (recette de Tags UI Helper de BakaCowpoke, CC0), une case `Button` par numéro (tous les numéros du pool, 30 après le dernier objet, au plus 1000 cases sauf objets), libres trop courts pour séquence + extras grisés, couleur de l'apparence posée après l'affichage via des couleurs ajoutées au thème (Global.SongCreator_rrggbbaa, retirées à la fin). `PopupInput` gardé en secours |
+| 0.6.3 | test onPC de la 0.6.2 : la liste défile et ne plante pas. Jo : « libre c'est noir, pas libre c'est gris » dans les quatre listes ; cases libres en fond transparent (noir de la liste), occupées en gris ou couleur d'apparence ; numéros libres trop courts pour séquence + extras marqués « pas la place » (Jo ne comprenait pas pourquoi ils étaient grisés). Légende en bas de la liste. « Ce qui sera créé » : une case par ligne (9 cases étirées) au lieu d'un seul bloc de texte |
+| 0.6.4 | test onPC de la 0.6.3 : couleurs et récap OK, mais cliquer une case de la liste ferme tout le plugin. Cause : `closeWindow` supprimait la liste (`Obj.Delete`), MA la supprime un peu plus tard, la fenêtre était donc encore « valide » et le secours `ScreenOverlay:ClearUIChildren()` effaçait aussi la fenêtre principale. Correction : index vérifié avec `GetUIChild`, attente de la suppression (yield), jamais d'effacement de l'écran tant que la fenêtre principale vit (au pire la liste est masquée). Ajout du test banane (`FindTexture`, System Monitor seulement) |
+| 0.6.5 | test onPC de la 0.6.4 : `LUA API_ObjectDelete: deletion of the child object is prohibited` au clic, la liste masquée au lieu d'être fermée, et un clic sur une case grisée passait au bouton Annuler de la fenêtre dessous (le plugin se fermait ensuite). Jo : « vire moi la banane » (test retiré), « fais en sorte que tous les pools marchent de la même façon ». Liste refaite **dans la fenêtre principale** : calque `DialogFrame` dans la même case que le setup, on passe de l'un à l'autre avec `Visible` / `Enabled` (recette UI Compact Layout de BakaCowpoke, CC0), cases vidées par `ScrollBox:ClearUIChildren()` et refaites à chaque choix, bouton Annuler. Toutes les cases cliquables ; « pas la place » affiche un avertissement orange. Clic en attente ignoré après la liste |
+| 0.7.0 | Jo (12/10) : « tout marche », on passe à Renommer / Dupliquer / Supprimer. Boutons de mode actifs ; panneau Song (ligne Song ▾ qui ouvre la liste des songs dans le même calque que les pools, nouveau nom, emplacements de la copie) à la place du panneau Créer ; récap et bouton principal selon le mode ; après une opération le bouton devient Fermer et toute modification remet en saisie. Renommer : `Label` page / séquence / timecode / macro, `Note` des séquences vérifiée en Lua, `"Ancien"` → `"Nouveau"` dans les commandes des cues et les lignes de macro, `currentSong` suivie. Dupliquer : `Copy` des séquences, de la page (216 / 121... réassignés, autres executors qui visaient la song rebranchés), de la macro (nom remplacé) et du timecode entier, puis chaque lien du timecode copié vers la song d'origine rebranché sur la copie (reconnu par identité d'objet, sinon par adresse ; écrit par handle, adresse ou adresse MA, vérifié par relecture ; échecs comptés et structure écrite dans le System Monitor). Supprimer : deux appuis, un seul Oops. Créer : commandes identiques à la 0.6.5 (vérifié sur simulation) ; avertissement si le nom est déjà porté par une page, séquence, timecode ou macro |
+| 0.7.1 | test console de la 0.7.0 (12/10) : Renommer, Dupliquer et Supprimer marchent (TC 7 : 5 liens rebranchés, 0 échec, Jo voit les pistes déclencher les nouvelles séquences). Mais Dupliquer remplit le System Monitor de lignes rouges « Could not resolve object address for TrackGroup 1 / <Sequence 541> ... », et la fermeture écrit « fenetre non supprimee (index 3, controle false), ecran vide ». Corrections : `ToAddr` seulement pour les classes qui ont une adresse (séquence, cue, part, page, executor, timecode, macro), une seule fois par objet ; liens internes au timecode ignorés ; liens reconnus par identité d'objet d'abord, par adresse seulement si l'identité ne trouve rien ; fermeture exactement comme GUI REPLACE V15 (`Obj.Delete(écran, Obj.Index(fenêtre))`, sans le contrôle `GetUIChild` qui échouait). Jo (12/10) : Renommer et Supprimer marchent ; note au nom de la song sur la page, le timecode et la macro aussi ; un tag par song sur tous ses objets. Tag : `Store Tag "Nom"` si absent de `ShowData().Tags`, puis `Assign Tag "Nom" At Page / Sequence a Thru b / Timecode / Macro` (syntaxe de Tags UI Helper, BakaCowpoke, CC0) ; Renommer : `Label Tag n "Nouveau"` ; Dupliquer : `Assign Off Tag "Origine"` sur la copie (refus seulement noté) puis le tag de la copie ; Supprimer : `Delete Tag n` |
+| 0.7.2 | Jo (12/10) : « il faut un pool tag, comme le pool séquence, tc, macro », « pour le duplicate, supprimer, etc... tu peux vérifier aussi avec les tags », « la possibilité de ne pas assigner de tag ». Tags lus dans `ShowData().Tags` comme un pool (numéro `no`, sinon rang) ; ligne Tag dans Créer et dans les emplacements de la copie (vide = pas de tag), liste « Select Tags » dans la fenêtre ; réglage Poser le tag Oui / Non ; tag visé par son numéro : `Store Tag n`, `Label Tag n "Nom"`, `Assign Tag n At ...`, `Assign Off Tag n At ...`, `Delete Tag n`. Vérification : tags d'un objet lus par `Get("Tags")` (format inconnu : texte découpé sur espaces / virgules, ou objet avec enfants ; première lecture écrite dans le System Monitor) ; un extra est reconnu par sa note ou par le tag ; « tag n (x objets) » sous la song ; objets taggés hors de la song listés en alerte, pas touchés, et le tag est alors gardé par Supprimer. Renommer ne crée plus de tag pour une song sans tag. Fenêtre 1300 x 870 (une ligne d'emplacement et une ligne de réglage en plus) |
+
+## Leçons apprises
+
+- **Plugin vide à l'import** : si le `.lua` n'est pas à côté du `.xml` lors de l'import, MA importe
+  un plugin vide (« Could not load ... as content is empty ») qui ne fait rien. Un export MA d'un
+  plugin vide n'écrit que le `.xml`. Toujours copier les deux fichiers du dépôt.
+- **Session réseau** : un plugin s'exécute et affiche ses fenêtres sur le poste qui le lance ;
+  les commandes `Cmd()` partent dans la session.
+- **MessageBox** : sur console, elle s'affichait sur tous les écrans. D'où la fenêtre sur mesure
+  sur l'écran 1.
+- **Éléments d'interface qui marchent en 2.3.2 sur console** (vérifié avec la grille de la v0.2.2) :
+  `ScreenOverlay:Append("BaseInput")`, `TitleBar`, `TitleButton`, `CloseButton`, `UILayoutGrid`,
+  `Button` avec `PluginComponent` + `Clicked` + `SignalValue`.
+- **À vérifier** : `LineEdit`, `CheckBox`, `ResizeCorner`, `PopupInput` avec `caller` = bouton.
+  Les propriétés « confort » passent par `opt()` : une propriété inconnue est ignorée et notée
+  dans le System Monitor au lieu de faire planter la fenêtre.
+- **Pas d'API pour la fenêtre native de pool** de l'Import/Export ; `PopupInput` est la fenêtre de
+  sélection native la plus proche (colonnes, filtre clavier).
+- **Plugins MATools** : compilés en bytecode Lua, payants et sous licence ; on s'en inspire pour
+  le visuel, on n'en reprend pas le code.
+
+- **`Cmd()` renvoie le retour de la ligne de commande** (« OK », « Syntax Error », « Illegal Command ») :
+  il faut le lire, sinon une commande refusée passe inaperçue.
+- **`CreateUndo()` / `CloseUndo()`** : passer la liste à `Cmd(cmd, undo)` regroupe toute la création dans un seul Oops.
+- **`ClassExists("Classe")`** permet de vérifier un élément d'interface avant de l'ajouter.
+- **Test console du 11/10 (v0.3.1)** : toutes les commandes de création passent (OK). `cue:Set("Command", ...)` donne
+  « LUA API Syntax error, wrong parameter #2 » : la cue n'a pas de propriété Command en 2.3.2, elle est
+  probablement sur la part 0. Un `Set` refusé ne lève pas toujours d'erreur Lua : il faut relire avec `Get`.
+  Les lignes de macro (`MacroLine:Set("Command")`) passent sans erreur.
+  Avec la v0.3.2 (commande écrite sur la part 0), les cues TC et la macro de rappel marchent.
+- **Apparence absente** : `Assign Appearance "X"` répond OK même si l'apparence X n'existe pas dans le show,
+  et rien n'est coloré. Le plugin vérifie donc les apparences dans `ShowData().Appearances` avant de créer.
+  La liste `Cue 0.6 + 0.7 + 22` marche très bien.
+- **Raccourcis clavier onPC** (F10 ou ShCuts) : ils captent les touches tapées dans les champs du plugin.
+  MA ne les coupe tout seul que dans ses propres menus et fenêtres.
+- **Fenêtre trop grande** : une zone « Stretch » partagée en lignes égales donne des cases énormes avec un
+  texte petit. Les fenêtres MA ont des lignes de hauteur fixe. Modèle choisi par Jo : « Search and Modify ».
+  Maquette v0.4 : `docs/Song_Creator_maquette_v0.4.html` (artifact https://claude.ai/artifact/YEKLN6ZJCbJx1G6jpW5vLQ),
+  codée en v0.4.0.
+- **Test console de la v0.4.0 (11/10)** : fenêtre trop petite à 1040 x 580 ; dans un `LineEdit` étroit l'icône
+  clavier mange la place et le numéro disparaît ; l'`Icon` d'un `Button` se centre **sur** le texte ; un texte
+  trop long pour sa case est coupé. Polices `Regular18/24`, couleurs `Global.*`, boutons grisés : OK.
+  Après une mise à jour, regarder d'abord la version dans la barre de titre (Jo a d'abord relancé la 0.3.4).
+- **Test console de la v0.4.1 (11/10)** : `IconAlignmentH = "Left"` marche sur un `Button` (icône à gauche du texte).
+  Numéros lisibles. Retours de Jo : pas de contour de fenêtre, cases trop serrées (on ne voit pas la séparation),
+  trop de gris. Cause : pas de `DialogFrame`, marges de 1 px, et un `UIObject` a un fond gris par défaut.
+- **Recettes de GUI REPLACE V15** (plugin Preset Replacer de Jo, validé sur console 2.3, copie dans
+  `reference/jo_preset_replacer/` des fichiers projet) : `BaseInput` à 2 lignes (titre 60, puis `DialogFrame`
+  avec `H = "100%"`, `W = "100%"`) ; marges des panneaux 10 ; marges des champs et boutons 3 à 5 ; libellé
+  à gauche dans une colonne fixe ; `BackColor = Root().ColorTheme.ColorGroups.Global.Transparent` pour les
+  textes, `Button.Background` pour les listes, `Button.BackgroundPlease` pour les boutons principaux ;
+  taille au plus 95 % de l'écran ; version dans la barre de titre ; boutons de choix qui affichent la valeur.
+- **Test console de la v0.5.0 (12/10)** : Jo trouve la fenêtre « pas mal et fonctionnelle ». Demandes : barre de
+  défilement dans les listes (souvent plus de 400 séquences dans un show) et objets affichés avec leur apparence,
+  pour les 4 pools. `PopupInput` ajoute « Select » devant le titre (« Select Select Sequence »).
+- **Listes avec apparences et défilement** (forum MA, sujets 68072, 69842, 68394, 8942) :
+  `PopupInput` `render_options.left_icon` ne montre que les icônes générées des presets, pas les apparences.
+  Il faut une fenêtre `Popup` avec une `ScrollableItemList` (`ItemType = "PopupItemButtonExt"`,
+  `ShowLeftIcon = "Yes"`), remplie par `list:AddListObjectItem(objet, texte, { appearance = true })` et
+  `AddListStringItem(texte, valeur)` ; choix par `list.OnSelectedItem = "NomDuSignal"` (avec `PluginComponent`),
+  puis `list:GetListSelectedItemIndex()` ; filtre = `LineEdit` avec `Property = "ItemFilter"`, `Target = list` ;
+  défilement = `ScrollBarV` dans sa propre colonne (`SizePolicy = "Content"`), `ScrollTarget = list` (le handle).
+- **Logo / image dans une fenêtre** (forum MA, sujet 69637, réponse d'Andreas de MA) : pas d'icône perso dans
+  `Icon` ; utiliser un `AppearancePreview` avec `Appearance = GetObject('Image 3.1')` (ou une apparence),
+  `BackColor = 'Global.Transparent'`, `Interactive = 'No'`. Jo a fait l'apparence
+  « [[LOGO Banane Vectorisé Blanc_png]] » (image `CUSTOM/LOGO Banane Vectorisé Blanc.png`).
+- **Liste native `PopupInput` (test 0.6.1, 12/10)** : marche, titre « Select Sequence » correct, mais pas
+  de barre de défilement ni d'apparences ; la popup se range en colonnes et s'arrête à ce qu'on lui donne.
+- **Recette de défilement publiée (BakaCowpoke, Tags UI Helper, CC0)** : `DialogFrame` à 2 colonnes
+  (`[2][2].SizePolicy = "Content"`), `ScrollBox` nommée, `ScrollBarV` avec `ScrollTarget = "../nom"`
+  (chemin texte, pas un handle comme en 0.6.0), enfants posés en `X`/`Y` avec `W`/`H`. Couleur sur
+  mesure : `Root().ColorTheme.ColorGroups.Global:Acquire()`, `Set("name")`, `Set("rgba", "rrggbbaa")`.
+- **Test onPC de la v0.6.2 (12/10)** : la recette `ScrollBox` + `ScrollBarV` marche (liste de 86 cases,
+  défilement, pas de plantage), le bouton désactivé (`Enabled = "No"`) s'affiche presque noir. Couleurs
+  d'apparence pas encore vues (séquences du show de test sans apparence ?).
+- **Index des fenêtres (0.6.4)** : `Obj.Index` compte à partir de 0 et `Obj.Delete` prend ce même index
+  (recette V15 `Obj.Delete(écran, Obj.Index(fenêtre))`), alors que `GetUIChild` compte à partir de 1.
+  `Obj.Delete(écran, 2)` avec l'index de `GetUIChild` : « deletion of the child object is prohibited ».
+  Plus simple : ne pas ouvrir de seconde fenêtre, passer d'un calque à l'autre dans la même.
+- **Clic sur un bouton désactivé (0.6.4)** : `Enabled = "No"` ne retient pas le clic, il passe à ce qui est
+  dessous (ici le bouton Annuler de la fenêtre principale). Garder les cases actives avec leur signal.
+- **Fermer une fenêtre parmi plusieurs (0.6.3 -> 0.6.4)** : `Obj.Delete(overlay, index)` ne supprime pas
+  tout de suite, `IsObjectValid` reste vrai juste après. Ne jamais enchaîner sur `ClearUIChildren()` de
+  l'écran : ça efface aussi les autres fenêtres du plugin. Attendre (yield) que la fenêtre disparaisse.
+- **ToAddr sur les objets internes d'un timecode (0.7.0)** : sur `TrackGroup`, pistes et plages, `ToAddr` écrit
+  « Could not resolve object address » en rouge (pas d'erreur Lua). Ne demander l'adresse que des objets de pool
+  (séquence, cue, page, executor...) et comparer les objets avec `HandleToInt`.
+- **Fermeture d'une fenêtre (0.7.0)** : le contrôle `overlay:GetUIChild(Obj.Index(w) + 1) == w` échoue sur console
+  (index 3, false) alors que `Obj.Delete(écran, Obj.Index(w))` seul (recette V15 de Jo) marche. Ne pas l'ajouter.
+- **Banane abandonnée pour de bon (12/10, Jo : « vire moi la banane »)** : `FindTexture` ne trouve pas les
+  images du show (« absente » pour tous les noms). Ne plus la proposer.
+- **Baguette de MULE creator (Andreas Glad, montré par Jo le 12/10)** : c'est l'icône intégrée de MA
+  `wizard`, passée à `MessageBox` (`icon = 'wizard'`), pas une image du show. Les icônes de barre de titre
+  viennent de la liste de textures de MA (`FindTexture(nom)` existe). Une image du show (la banane) n'y est
+  pas a priori : à vérifier sans risque avec `FindTexture` avant de la mettre en icône.
+- **Couleur d'une apparence** : propriété `Color` (« 1.0,1.0,1.0,1.0 », 0..1, vu dans l'export xml de Jo).
+- **Test console de la v0.6.0 (12/10)** : la liste `Popup` + `ScrollableItemList` fait **planter instantanément**
+  à l'ouverture (flèches des pools) ; le logo banane (`AppearancePreview` dans la barre de titre) ne s'affiche
+  pas et l'affichage est cassé. Jo : « laisse tomber » la banane, retour à la fenêtre d'avant et à la liste
+  `PopupInput` qui marchait. Ne plus ajouter ces éléments dans le plugin : à tester d'abord dans un plugin
+  de test séparé, sur onPC.
+
+## Ressources
+
+Le dossier `Ressources/` du dépôt contient deux références Lua grandMA3 copiées avec leur licence :
+la documentation de l'API (MacTirney, MIT) et des exemples avec la liste des éléments d'interface,
+polices, icônes et couleurs (BakaCowpoke, CC0). À consulter avant de deviner un nom de fonction ou
+de propriété. Elles confirment que `LineEdit`, `ResizeCorner`, la police `Medium20` et l'icône
+`object_plugin1` existent, et que `MessageBox` n'a pas d'option pour choisir l'écran.
+
+Ajouté le 11/10/2026 : `Ressources/GrandMA3-Reference-patopesto/`, copie de la référence de
+[grandma3.bambinito.net](https://grandma3.bambinito.net/reference/) (dépôt patopesto, AGPL v3). C'est un dump de la
+vraie API **2.3** : à consulter en premier (`API_2.3.md`, `ENUMS_2.3.md`). Documentation seulement, pas de copie de code.
+Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left_icon, number, right_icon}`,
+`MessageBox` accepte un `display` en 2.3, `Cmd()` renvoie « Ok », `LineEdit` a un signal `TextChanged`, et les icônes
+`ok`, `cancel`, `undo`, `triangle_down`, `object_sequence`, `object_macro`, `object_timecode`, `object_pages` existent.
+
+## Reste à faire
+
+- v0.6.5 validée par Jo sur onPC (12/10) : « tout marche ». Couleurs d'apparence encore à voir sur des
+  objets qui en ont.
+- **v0.7.0** : Renommer, Dupliquer (timecode compris, liens écrits par handle) et Supprimer validés sur
+  console par Jo (12/10). **v0.7.2** à confirmer : plus de lignes rouges, fermeture, notes, ligne Tag,
+  commandes de tag par numéro, lecture des tags d'un objet (ligne « tags lus sur ... » du System
+  Monitor), `Copy` qui emporte ou non le tag, hauteur de la fenêtre (870). Oops ne remet pas les
+  commandes de cues / lignes de macro modifiées en Lua par Renommer.
+- Question de Jo (12/10) : comment le plugin reconnaît les extras ? Par la **note** (nom de la song), sur les
+  séquences qui suivent directement la main. L'ancienne macro pose aussi cette note, mais laissait choisir
+  le premier extra : un trou entre la main et les extras les cache au plugin. À reprendre si Jo a de telles songs.
+- Couleurs d'apparence de la liste : vérifier qu'elles sont bien retirées du thème à la fermeture
+  (BakaCowpoke note que `Delete()` en Lua ne retirait pas ses couleurs du thème).
+- Pistes si la v0.6.2 marche : ouvrir la liste sur le numéro actuel (`ScrollDo`), filtre par nom.
+- Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
+- Saisie de texte avec les raccourcis clavier actifs sur onPC.
+- Question de Jo (11/10) : le plugin apporte-t-il plus que la macro ? Piste : gérer les songs existantes
+  (liste, renommer, supprimer, dupliquer, modèle, link Reaper).
+- Plus tard : séquence modèle à copier, renommer / supprimer une song, link Reaper.

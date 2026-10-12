@@ -1,0 +1,371 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Song Creator MA3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : un écran de console MA3 ; la fenêtre reprend la grammaire de « Search and Modify »
+   (colonne de modes à gauche, filtres au centre, résultats à droite, barre de boutons en bas).
+   Choix assumé d'un seul thème sombre : c'est l'écran de la console. */
+:root{
+  --screen:#060606;      /* fond d'écran console */
+  --win:#171717;         /* corps de fenêtre */
+  --bar:#2e2e2e;         /* barre de titre */
+  --cell:#2b2b2b;        /* boutons */
+  --cell-hi:#383838;
+  --field:#222222;       /* cases de valeur */
+  --gap:#0b0b0b;         /* joints noirs entre boutons */
+  --text:#e6e6e6;
+  --mute:#9b9b9b;
+  --sel:#f1c40f;         /* texte sélectionné (jaune MA) */
+  --accent:#118a8c;      /* bouton d'action (sarcelle MA) */
+  --pop-bar:#9c99ad;     /* barre de titre des listes */
+  --pop-ink:#121212;
+  --warn:#f0a43a;
+  --bad:#ff5a52;
+  --ok:#62c776;
+  --app-green:#2f9e47; --app-blue:#2f6fd6; --app-lav:#b6a2ef; --app-black:#000000;
+  --f-ui:"Roboto","Helvetica Neue",Arial,sans-serif;
+  --f-mono:"Roboto Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--screen);color:var(--text);font-family:var(--f-ui);margin:0;padding-block:20px 28px;padding-inline:16px}
+.wrap{max-width:1000px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+.intro{color:var(--mute);font-size:13px;line-height:1.5;max-width:70ch;margin:0}
+.intro b{color:var(--text);font-weight:500}
+.stage{overflow-x:auto;overflow-y:hidden;border:1px solid #1d1d1d;background:var(--screen)}
+.fit{position:relative}
+.win{position:absolute;left:0;top:0;width:1000px;height:530px;transform-origin:0 0;background:var(--win);
+  display:grid;grid-template-rows:40px minmax(0,1fr) 54px;font-size:15px;user-select:none}
+
+/* barre de titre */
+.title{display:flex;align-items:stretch;background:var(--bar);border-bottom:1px solid var(--gap)}
+.title .ico{width:40px;display:grid;place-items:center;color:var(--mute)}
+.title h1{font-size:16px;font-weight:500;margin:0;align-self:center;letter-spacing:.01em}
+.title h1 span{color:var(--mute);font-weight:400;margin-left:10px;font-size:13px}
+.title .sp{flex:1}
+.tbtn{width:44px;border:0;border-left:1px solid var(--gap);background:transparent;color:var(--text);font:500 18px var(--f-ui);cursor:pointer}
+.tbtn:hover{background:var(--cell-hi)}
+
+/* corps : modes | réglages | résultat */
+.body{display:grid;grid-template-columns:116px minmax(0,1fr) 296px;gap:1px;background:var(--gap);min-height:0}
+.modes{background:var(--win);display:flex;flex-direction:column;gap:1px}
+.modes .lbl{font-size:12px;color:var(--mute);padding:8px 10px 6px}
+.mode{height:50px;border:0;background:var(--cell);color:var(--text);font:400 14px var(--f-ui);text-align:left;padding:0 12px;cursor:pointer}
+.mode.on{color:var(--sel);background:#242424}
+.mode[disabled]{color:#5d5d5d;cursor:default}
+.mode small{display:block;font-size:10px;color:#575757;margin-top:2px}
+
+.main{background:var(--win);display:flex;flex-direction:column;padding:10px 10px 0;gap:6px;min-width:0}
+.namerow{display:grid;grid-template-columns:44px minmax(0,1fr);height:44px;gap:1px;background:var(--gap)}
+.kb{background:var(--field);display:grid;place-items:center;color:var(--mute)}
+.namerow input{background:var(--field);border:0;color:var(--text);font:500 17px var(--f-ui);padding:0 12px;min-width:0}
+.maname{font:400 12px var(--f-mono);color:var(--mute);height:18px;padding-left:2px}
+.maname b{color:var(--text);font-weight:500}
+.sect{font-size:14px;color:var(--text);text-align:center;margin-top:8px;position:relative}
+.sect::before,.sect::after{content:"";position:absolute;top:50%;width:30%;height:1px;background:#2a2a2a}
+.sect::before{left:0}.sect::after{right:0}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--gap)}
+.hd{background:var(--win);font-size:12px;color:var(--mute);text-align:center;padding:6px 4px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.val{display:grid;grid-template-columns:minmax(0,1fr) 34px;height:44px;background:var(--field)}
+.val.solo{grid-template-columns:1fr}
+.val input{background:transparent;border:0;color:var(--text);font:500 17px var(--f-ui);text-align:center;width:100%;min-width:0;font-variant-numeric:tabular-nums}
+.val input:disabled{color:#555}
+.drop{border:0;border-left:1px solid var(--gap);background:var(--cell);color:var(--text);font-size:12px;cursor:pointer}
+.drop:hover{background:var(--cell-hi)}
+.val.busy input{color:var(--warn)}
+.yn{border:0;background:var(--field);color:var(--text);font:500 15px var(--f-ui);height:44px;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.yn .box{width:16px;height:16px;border:2px solid var(--mute);display:grid;place-items:center;font-size:12px;line-height:1}
+.yn.on .box{border-color:var(--sel);color:var(--sel)}
+.yn.on{color:var(--sel)}
+.fixed{margin-top:auto;font-size:12px;color:#6c6c6c;padding:8px 2px 10px;font-family:var(--f-mono)}
+
+/* panneau résultat */
+.res{background:var(--win);display:flex;flex-direction:column;min-width:0}
+.res h2{font-size:14px;font-weight:400;margin:0;text-align:center;padding:9px 0 8px;border-bottom:1px solid var(--gap)}
+.rows{list-style:none;margin:0;padding:4px 0;overflow:auto;flex:1}
+.rows li{display:grid;grid-template-columns:14px 92px minmax(0,1fr);gap:8px;align-items:start;padding:4px 10px;font-size:13px}
+.rows li .k{color:var(--mute)}
+.rows li .v{min-width:0;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.sw{width:12px;height:12px;border:1px solid #444}
+.chips{display:flex;flex-wrap:wrap;gap:3px}
+.chip{font:400 11px var(--f-mono);padding:2px 5px;background:#262626;border-left:3px solid #444;white-space:nowrap}
+.alerts{border-top:1px solid var(--gap);padding:8px 10px;font-size:13px;display:flex;flex-direction:column;gap:4px;min-height:38px}
+.alerts .w{color:var(--warn)} .alerts .e{color:var(--bad)} .alerts .o{color:var(--ok)}
+
+/* barre de boutons */
+.foot{display:grid;grid-template-columns:116px repeat(3,minmax(0,1fr));gap:1px;background:var(--gap);border-top:1px solid var(--gap)}
+.foot .blank{background:var(--win)}
+.fb{border:0;background:var(--cell);color:var(--text);font:400 15px var(--f-ui);display:flex;align-items:center;gap:12px;padding:0 18px;cursor:pointer}
+.fb:hover{background:var(--cell-hi)}
+.fb .i{font-size:18px;width:20px;text-align:center}
+.fb.go{background:var(--accent);color:#fff}
+.fb.go:hover{background:#15a1a3}
+.fb.go.arm{background:#8a6a10}
+.fb[disabled]{opacity:.4;cursor:default}
+.corner{position:absolute;right:2px;bottom:2px;width:14px;height:14px;border-right:2px solid #555;border-bottom:2px solid #555;pointer-events:none}
+
+/* liste de pool en surimpression, façon « Select Selection » */
+.pop{position:absolute;width:300px;background:#141414;border:1px solid #000;box-shadow:0 8px 28px #000c;display:flex;flex-direction:column;z-index:5}
+.pop .pt{display:flex;align-items:center;background:var(--pop-bar);color:var(--pop-ink);height:32px}
+.pop .pt b{flex:1;font-weight:500;font-size:14px;padding-left:10px}
+.pop .pt button{width:32px;height:32px;border:0;background:#cfcfcf;color:#111;font-size:15px;cursor:pointer}
+.pop .pf{display:grid;grid-template-columns:36px 1fr;height:30px;border-bottom:1px solid #000}
+.pop .pf span{display:grid;place-items:center;color:var(--mute);background:#1d1d1d;font-size:10px}
+.pop .pf input{background:#1d1d1d;border:0;color:var(--text);font:400 14px var(--f-ui);padding:0 8px;min-width:0}
+.pop ul{list-style:none;margin:0;padding:0;max-height:300px;overflow:auto}
+.pop li{display:grid;grid-template-columns:18px 40px minmax(0,1fr);gap:6px;align-items:center;height:28px;padding:0 8px;font-size:13px;cursor:pointer}
+.pop li:hover{background:#2f2f2f}
+.pop li.cur{background:#4a4a4a}
+.pop li .n{text-align:right;font-variant-numeric:tabular-nums;color:var(--mute)}
+.pop li.free{color:#8f8f8f}
+.pop li .ic{width:12px;height:12px;background:#555}
+.pop li.free .ic{background:transparent;border:1px dashed #555}
+
+.notes{font-size:13px;color:var(--mute);line-height:1.5;margin:0;padding-left:18px;max-width:75ch}
+.notes li+li{margin-top:4px}
+button:focus-visible,input:focus-visible{outline:2px solid var(--sel);outline-offset:-2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <p class="intro"><b>Maquette v0.4 du Song Creator</b>, dans l'esprit de la fenêtre Search and Modify. Tape un numéro dans une case, ou touche ▾ pour ouvrir la liste du pool. Les noms et numéros du show sont des exemples.</p>
+
+  <div class="stage" id="stage">
+    <div class="fit" id="fit">
+      <div class="win" id="win" role="dialog" aria-labelledby="wt">
+        <div class="title">
+          <span class="ico" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3h3a2 2 0 0 1 4 0h3v5a2 2 0 0 1 0 4v7h-6a2 2 0 0 0-4 0H3v-6a2 2 0 0 0 0-4V3h6z"/></svg>
+          </span>
+          <h1 id="wt">Song Creator<span>v0.4</span></h1>
+          <span class="sp"></span>
+          <button class="tbtn" type="button" title="Aide" id="help">?</button>
+          <button class="tbtn" type="button" title="Fermer" id="close">✕</button>
+        </div>
+
+        <div class="body">
+          <nav class="modes" aria-label="Mode">
+            <div class="lbl">Mode :</div>
+            <button class="mode on" type="button">Créer</button>
+            <button class="mode" type="button" disabled>Renommer<small>plus tard</small></button>
+            <button class="mode" type="button" disabled>Dupliquer<small>plus tard</small></button>
+            <button class="mode" type="button" disabled>Supprimer<small>plus tard</small></button>
+          </nav>
+
+          <section class="main">
+            <div class="namerow">
+              <span class="kb" aria-hidden="true">
+                <svg width="20" height="14" viewBox="0 0 20 14" fill="none" stroke="currentColor" stroke-width="1.3"><rect x=".7" y=".7" width="18.6" height="12.6" rx="1"/><path d="M4 4h1M7 4h1M10 4h1M13 4h1M16 4h0M4 7h1M7 7h1M10 7h1M13 7h1M16 7h0M5 10h10"/></svg>
+              </span>
+              <input id="name" type="text" value="Nuit Blanche" aria-label="Nom de la song" autocomplete="off">
+            </div>
+            <div class="maname" id="maname"></div>
+
+            <div class="sect">Emplacements :</div>
+            <div class="grid4">
+              <div class="hd">Page</div><div class="hd">Séquence main</div><div class="hd">Macro de rappel</div><div class="hd">Timecode</div>
+              <div class="val" id="v-page"><input id="page" inputmode="numeric" value="5" aria-label="Page"><button class="drop" type="button" data-pool="page" aria-label="Choisir la page">▾</button></div>
+              <div class="val" id="v-seq"><input id="seq" inputmode="numeric" value="31" aria-label="Séquence main"><button class="drop" type="button" data-pool="seq" aria-label="Choisir la séquence">▾</button></div>
+              <div class="val" id="v-macro"><input id="macro" inputmode="numeric" value="5" aria-label="Macro de rappel"><button class="drop" type="button" data-pool="macro" aria-label="Choisir la macro">▾</button></div>
+              <div class="val" id="v-tc"><input id="tc" inputmode="numeric" value="5" aria-label="Timecode"><button class="drop" type="button" data-pool="tc" aria-label="Choisir le timecode">▾</button></div>
+            </div>
+
+            <div class="sect">Réglages :</div>
+            <div class="grid4">
+              <div class="hd">BPM</div><div class="hd">Extras (0 à 10)</div><div class="hd">Cues de song</div><div class="hd">Créer le timecode</div>
+              <div class="val solo"><input id="bpm" inputmode="numeric" value="128" aria-label="BPM"></div>
+              <div class="val solo"><input id="extras" inputmode="numeric" value="4" aria-label="Extras"></div>
+              <div class="val solo"><input id="cues" inputmode="numeric" value="20" aria-label="Cues de song"></div>
+              <button class="yn on" type="button" id="tcOn" aria-pressed="true"><span class="box">✓</span><span id="tcTxt">Oui</span></button>
+            </div>
+
+            <div class="fixed">Exec main 216 · extras 121-130 · pages communes 101-120 · Speed Master 3.1</div>
+          </section>
+
+          <aside class="res">
+            <h2>Ce qui sera créé :</h2>
+            <ul class="rows" id="rows"></ul>
+            <div class="alerts" id="alerts"></div>
+          </aside>
+        </div>
+
+        <div class="foot">
+          <div class="blank"></div>
+          <button class="fb go" type="button" id="go"><span class="i">✓</span><span id="goTxt">Créer la song</span></button>
+          <button class="fb" type="button" id="reset"><span class="i">↺</span>Valeurs par défaut</button>
+          <button class="fb" type="button" id="cancel"><span class="i">✕</span>Annuler</button>
+        </div>
+        <span class="corner" aria-hidden="true"></span>
+      </div>
+    </div>
+  </div>
+
+  <ul class="notes">
+    <li>Les cases font une hauteur fixe et le texte est plus grand : la fenêtre garde cette taille au lieu de s'étirer.</li>
+    <li>La liste ▾ s'ouvre à côté de la case, par-dessus la fenêtre, comme les listes de Search and Modify.</li>
+    <li>Les modes grisés à gauche montrent où pourraient aller les prochaines fonctions.</li>
+  </ul>
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const win=$('win'), stage=$('stage'), fit=$('fit');
+
+// ---- pools d'exemple du show ----
+const songs=['Ouverture','Le_Vent','Ballade','Rappel'];
+const POOLS={
+  page:{title:'Select Page',items:{}},
+  seq:{title:'Select Sequence',items:{}},
+  macro:{title:'Select Macro',items:{}},
+  tc:{title:'Select Timecode',items:{}},
+};
+songs.forEach((s,i)=>{
+  POOLS.page.items[i+1]=s;
+  POOLS.macro.items[i+1]=s;
+  POOLS.tc.items[i+1]=s;
+  const base=1+i*6;
+  POOLS.seq.items[base]=s;
+  for(let k=1;k<=5;k++) POOLS.seq.items[base+k]=s+' extra '+k;
+});
+POOLS.seq.items[25]='Communs'; POOLS.seq.items[26]='Strobes'; POOLS.seq.items[27]='Fumée';
+for(let p=101;p<=120;p++) POOLS.page.items[p]=p===101?'Communs':'Communs_'+(p-100);
+POOLS.macro.items[10]='Reset_Show';
+
+const DEF={name:'Nuit Blanche',page:5,seq:31,macro:5,tc:5,bpm:128,extras:4,cues:20,tcOn:true};
+let tcOn=true, armed=false, done=false;
+
+const num=id=>{const n=parseInt($(id).value,10);return Number.isFinite(n)?n:null};
+const maName=()=>$('name').value.trim().replace(/"/g,'').replace(/\s+/g,'_');
+const extrasN=()=>Math.max(0,Math.min(10,num('extras')??0));
+
+function busyList(){
+  const b=[], seq=num('seq'), n=extrasN();
+  if(POOLS.page.items[num('page')]) b.push(`Page ${num('page')} « ${POOLS.page.items[num('page')]} »`);
+  if(seq) for(let s=seq;s<=seq+n;s++) if(POOLS.seq.items[s]) b.push(`Séquence ${s} « ${POOLS.seq.items[s]} »`);
+  if(POOLS.macro.items[num('macro')]) b.push(`Macro ${num('macro')} « ${POOLS.macro.items[num('macro')]} »`);
+  if(tcOn && POOLS.tc.items[num('tc')]) b.push(`Timecode ${num('tc')} « ${POOLS.tc.items[num('tc')]} »`);
+  return b;
+}
+
+function error(){
+  if(!maName()) return 'Donne un nom à la song.';
+  for(const [id,l] of [['page','la page'],['seq','la séquence main'],['macro','la macro'],['bpm','le BPM'],['cues','le nombre de cues']])
+    if(!num(id)||num(id)<1) return `Indique ${l}.`;
+  if(tcOn&&(!num('tc')||num('tc')<1)) return 'Indique le numéro de timecode.';
+  if((num('extras')??0)>10) return '10 extras au maximum (Exec 121 à 130).';
+  return '';
+}
+
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function render(){
+  const name=maName()||'?', n=extrasN(), seq=num('seq')||0, cues=num('cues')||0;
+  $('maname').innerHTML=maName()?`Nom dans MA : <b>${esc(maName())}</b>`:'';
+  $('tc').disabled=!tcOn; $('tcTxt').textContent=tcOn?'Oui':'Non';
+  $('tcOn').classList.toggle('on',tcOn); $('tcOn').setAttribute('aria-pressed',tcOn);
+  $('tcOn').querySelector('.box').textContent=tcOn?'✓':'';
+  ['page','macro'].forEach(k=>$('v-'+k).classList.toggle('busy',!!POOLS[k].items[num(k)]));
+  $('v-tc').classList.toggle('busy',tcOn&&!!POOLS.tc.items[num('tc')]);
+  let sb=false; for(let s=seq;s<=seq+n;s++) if(POOLS.seq.items[s]) sb=true;
+  $('v-seq').classList.toggle('busy',sb);
+
+  const sw=c=>`<span class="sw" style="background:${c}"></span>`;
+  const rows=[
+    ['','Page',`${num('page')??'?'} « ${esc(name)} »`],
+    [sw('var(--app-green)'),'Séquence',`${seq||'?'} → Exec 216`],
+    [n?sw('var(--app-blue)'):'','Extras',n?`${seq+1} à ${seq+n} → Exec 121 à ${120+n}`:'aucun'],
+    ['','Notes',`« ${esc(name)} » sur ${n+1} séquence${n?'s':''}`],
+  ];
+  const lav='border-left-color:var(--app-lav)', blk='border-left-color:#000;background:#0d0d0d';
+  const chips=`<span class="chips"><span class="chip">0.5 Mise</span><span class="chip" style="${lav}">0.6 Select TC</span><span class="chip" style="${lav}">0.7 Go TC</span><span class="chip">1 à ${cues||'?'}</span><span class="chip" style="${blk}">${cues+1} Black Out</span><span class="chip" style="${lav}">${cues+2} Off TC</span></span>`;
+  rows.push(['','Cues',chips]);
+  rows.push(['','Timecode',tcOn?`${num('tc')??'?'} « ${esc(name)} »`:'non']);
+  rows.push(['','Macro',`${num('macro')??'?'} « ${esc(name)} », 7 lignes`]);
+  rows.push(['','Speed Master',`3.1 à ${num('bpm')??'?'} BPM`]);
+  $('rows').innerHTML=rows.map(([a,k,v])=>`<li><span>${a}</span><span class="k">${k}</span><span class="v">${v}</span></li>`).join('');
+
+  const err=error(), busy=busyList(), al=[];
+  if(done) al.push(`<span class="o">Song « ${esc(name)} » créée (maquette).</span>`);
+  else if(err) al.push(`<span class="e">${esc(err)}</span>`);
+  else if(busy.length) al.push(`<span class="w">Déjà occupé, sera écrasé : ${busy.map(esc).join(', ')}.</span>`);
+  else al.push('<span class="o">Prêt.</span>');
+  $('alerts').innerHTML=al.join('');
+
+  const go=$('go');
+  go.disabled=!!err&&!done;
+  go.classList.toggle('arm',armed);
+  $('goTxt').textContent=done?'Fermer':armed?'Écraser et créer':'Créer la song';
+}
+
+function change(){armed=false;done=false;render()}
+['name','page','seq','macro','tc','bpm','extras','cues'].forEach(id=>$(id).addEventListener('input',change));
+$('tcOn').addEventListener('click',()=>{tcOn=!tcOn;change()});
+$('reset').addEventListener('click',()=>{
+  for(const k of ['page','seq','macro','tc','bpm','extras','cues']) $(k).value=DEF[k];
+  $('name').value=DEF.name; tcOn=true; closePop(); change();
+});
+$('go').addEventListener('click',()=>{
+  if(done){done=false;render();return}
+  if(error()) return;
+  if(busyList().length&&!armed){armed=true;render();return}
+  armed=false;done=true;render();
+});
+const flash=()=>{win.animate&&win.animate([{opacity:1},{opacity:.4},{opacity:1}],{duration:260})};
+$('cancel').addEventListener('click',flash); $('close').addEventListener('click',flash);
+$('help').addEventListener('click',()=>{$('alerts').innerHTML='<span class="o">Remplis le nom, choisis les emplacements, puis Créer la song.</span>'});
+
+// ---- liste de pool en surimpression ----
+let pop=null;
+function closePop(){if(pop){pop.remove();pop=null}}
+function freeSlots(key,block){
+  const it=POOLS[key].items, out=[]; let n=1;
+  while(out.length<12&&n<1000){
+    let ok=true; for(let k=0;k<block;k++) if(it[n+k]) ok=false;
+    if(ok) out.push(n); n++;
+  }
+  return out;
+}
+function openPop(key,btn){
+  closePop();
+  const P=POOLS[key], block=key==='seq'?1+extrasN():1, cur=num(key);
+  const entries=Object.keys(P.items).map(Number).sort((a,b)=>a-b).map(n=>({n,label:P.items[n],free:false}))
+    .concat(freeSlots(key,block).map(n=>({n,label:'- libre -',free:true})));
+  pop=document.createElement('div'); pop.className='pop'; pop.setAttribute('role','dialog');
+  pop.innerHTML=`<div class="pt"><b>${P.title}</b><button type="button" aria-label="Fermer la liste">✕</button></div>
+    <div class="pf"><span>ABC</span><input type="text" placeholder="Filtrer" aria-label="Filtrer la liste"></div><ul></ul>`;
+  const ul=pop.querySelector('ul'), f=pop.querySelector('input');
+  const draw=()=>{
+    const q=f.value.trim().toLowerCase();
+    ul.innerHTML=entries.filter(e=>!q||String(e.n).startsWith(q)||e.label.toLowerCase().includes(q))
+      .map(e=>`<li data-n="${e.n}" class="${e.free?'free':''}${e.n===cur?' cur':''}"><span class="ic"></span><span class="n">${e.n}</span><span>${esc(e.label)}</span></li>`).join('');
+  };
+  draw();
+  f.addEventListener('input',draw);
+  ul.addEventListener('click',e=>{const li=e.target.closest('li'); if(!li) return; $(key).value=li.dataset.n; closePop(); change();});
+  pop.querySelector('.pt button').addEventListener('click',closePop);
+  win.appendChild(pop);
+  const wr=win.getBoundingClientRect(), br=btn.getBoundingClientRect(), s=wr.width/1000;
+  let x=(br.right-wr.left)/s-300, y=(br.bottom-wr.top)/s+2;
+  x=Math.max(8,Math.min(x,1000-308)); if(y+370>530) y=Math.max(44,(br.top-wr.top)/s-372);
+  pop.style.left=x+'px'; pop.style.top=y+'px';
+  const c=ul.querySelector('.cur'); if(c) c.scrollIntoView({block:'center'});
+  f.focus({preventScroll:true});
+}
+win.querySelectorAll('.drop').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();openPop(b.dataset.pool,b)}));
+win.addEventListener('click',e=>{if(pop&&!pop.contains(e.target)) closePop()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape') closePop()});
+
+// ---- mise à l'échelle de l'écran ----
+function scale(){
+  const w=stage.clientWidth, s=Math.max(.6,Math.min(1,w/1000));
+  win.style.transform=`scale(${s})`;
+  fit.style.width=(1000*s)+'px'; fit.style.height=(530*s)+'px';
+}
+addEventListener('resize',scale); scale();
+render();
+})();
+</script>
