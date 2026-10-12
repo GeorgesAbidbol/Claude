@@ -1,8 +1,8 @@
-# Plugin Song Creator v0.6.5 (grandMA3 2.3.2.0)
+# Plugin Song Creator v0.7.0 (grandMA3 2.3.2.0)
 
 Plugin grandMA3 qui remplace la macro « FULL SONG CREATOR » : une fenêtre de setup,
 puis la création complète d'une song (page, séquences, cues, timecode, executors,
-macro de rappel).
+macro de rappel). Depuis la 0.7 : renommer, dupliquer et supprimer une song existante.
 
 ## Installation
 Pour mettre à jour : vérifier la version dans la barre de titre après l'import. Si elle n'a pas
@@ -25,8 +25,8 @@ plugin GUI REPLACE V15 de Jo : cadre de dialogue MA, marges entre les cases, lib
 - Une seule fenêtre, toujours sur **l'écran 1**, taille de départ 1300 x 760 (au plus 95 % de l'écran).
 - **Barre de titre** : on la fait glisser pour déplacer la fenêtre ; version à droite ; **croix**
   pour fermer (ou Échap). **Coin de redimensionnement** en bas à droite.
-- **À gauche, « Mode »** : Créer (en jaune). Renommer, Dupliquer et Supprimer sont grisés,
-  ils viendront plus tard.
+- **À gauche, « Mode »** : Créer, Renommer, Dupliquer, Supprimer (le mode en cours en jaune).
+  Le centre, le récap de droite et le bouton principal changent avec le mode (voir plus bas).
 - **Au centre** :
   - **Song** : le nom, avec en dessous le nom tel qu'il sera écrit dans MA (`Nuit_Blanche`) ;
   - **Emplacements** : une ligne par objet (Page, Séquence main, Macro de rappel, Timecode) avec
@@ -46,7 +46,8 @@ plugin GUI REPLACE V15 de Jo : cadre de dialogue MA, marges entre les cases, lib
 - **En bas** :
   - **Créer la song** (dans la couleur de mise en avant de MA) : si quelque chose est déjà occupé,
     un deuxième appui (« Écraser et créer ») est demandé. Le résultat s'affiche dans la fenêtre et
-    le bouton devient « Fermer » ;
+    le bouton devient « Fermer ». Changer un champ, le mode ou la song remet la fenêtre en saisie :
+    on peut enchaîner plusieurs songs sans rouvrir le plugin ;
   - **Valeurs par défaut** : remet tout sauf le nom (premiers numéros libres, 120 BPM, 4 extras,
     20 cues, timecode Oui) ;
   - **Annuler**.
@@ -69,8 +70,33 @@ pour revenir à l'apparence par défaut.
   `Off Timecode "Nom"` posées sur les cues TC.
 - Macro de rappel (7 lignes), `$currentSong` conservé tel quel.
 
-## Annuler une song
-Toute la création est regroupée dans une seule action **Oops** : un Oops annule la song entière.
+## Renommer, Dupliquer, Supprimer (0.7)
+Une song, c'est **une page et une séquence qui portent le même nom** (ce que font le plugin et
+l'ancienne macro). Ses extras sont les séquences qui suivent la main avec ce nom en note, son
+timecode et sa macro de rappel sont ceux qui portent ce nom.
+
+Dans ces trois modes, la ligne **Song ▾** ouvre la liste des songs du show (même liste que les
+pools, dans la fenêtre). En dessous : la séquence main, les extras, le timecode et la macro trouvés.
+- **Renommer** : tape le nouveau nom. Page, séquence main, notes de toutes les séquences, timecode
+  et macro prennent le nouveau nom ; dans les commandes des cues et les lignes de la macro,
+  `"Ancien_Nom"` devient `"Nouveau_Nom"` (donc `Go+ Timecode "..."`, `Page "..."`...). Si la song
+  était la `currentSong`, la variable suit. Un nom déjà porté par une page, une séquence, un
+  timecode ou une macro est refusé.
+- **Dupliquer** : nouveau nom (`Nom_copie` proposé) et emplacements de la copie (les premiers
+  libres après la song, modifiables avec ▾ comme dans Créer ; timecode et macro grisés si la song
+  n'en a pas). Le plugin copie les séquences avec leurs cues, la page (puis remet 216 et 121... sur
+  les nouvelles séquences, ainsi que les autres executors de la page qui visaient une séquence de
+  la song), la macro (nom remplacé dans ses lignes) et **le timecode entier** : chaque lien vers la
+  song d'origine (piste, event vers une cue, executor) est ensuite rebranché sur la copie. Les
+  pistes qui visent d'autres séquences restent telles quelles. Si un emplacement est occupé,
+  deuxième appui « Écraser et dupliquer ».
+- **Supprimer** : le récap liste tout ce qui part (page, séquences, timecode, macro). Bouton gris
+  à texte rouge, deuxième appui « Confirmer la suppression ».
+
+## Annuler (Oops)
+Chaque opération (créer, renommer, dupliquer, supprimer) est regroupée dans une seule action
+**Oops** : un Oops l'annule en entier. Exception : pour **Renommer**, les commandes des cues et les
+lignes de macro sont écrites en Lua et Oops ne les remet pas ; renommer à nouveau pour revenir.
 
 ## Diagnostic
 Chaque commande envoyée est vérifiée : si MA la refuse (« Syntax Error », « Illegal Command »),
@@ -85,8 +111,11 @@ Sur onPC, si les raccourcis clavier sont actifs, les touches tapées dans la fen
 raccourcis. Coupe-les avec F10 (ou ShCuts) le temps de remplir le setup.
 
 ## À vérifier sur console
-- v0.6.5 : la liste est maintenant dans la fenêtre principale (plus de seconde fenêtre que MA refusait
-  de supprimer). À vérifier sur les quatre pools : clic libre, clic occupé, Annuler, « pas la place ».
+- v0.7.0 : les trois nouveaux modes. Le System Monitor note pour le timecode copié :
+  `TC n : x objets lus, y liens vers la song d'origine, z rebranches ... (Target par handle ...)`.
+  Si des liens n'ont pas pu être rebranchés, ils sont listés avec la structure du timecode
+  (`TC classe ...`) : une photo de ces lignes suffit pour corriger.
+- Liste dans la fenêtre principale validée sur onPC en 0.6.5 (« tout marche »).
 - La liste (ScrollBox + ScrollBarV, recette d'un plugin publié) a défilé sans plantage sur onPC en 0.6.2
   à 0.6.4. Les couleurs d'apparence restent à voir sur des objets qui ont une apparence ; elles sont
   posées après l'affichage de la liste. Le System Monitor note « liste Sequences affichee » puis

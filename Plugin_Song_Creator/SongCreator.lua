@@ -3,6 +3,7 @@
 --  Remplace la macro "FULL SONG CREATOR" : une fenêtre de setup, puis
 --  création de la page, des séquences, des cues, du timecode, des executors
 --  et de la macro de rappel de la song.
+--  Depuis la 0.7 : renommer, dupliquer et supprimer une song existante.
 -- ============================================================================
 
 local pluginName    = select(1, ...)
@@ -10,7 +11,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.6.5"
+local VERSION = "0.7.0"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -20,6 +21,8 @@ local CFG = {
   execExtraFrom = 121,            -- 1er executor des extras
   maxExtras     = 10,             -- 121..130
   commonPages   = "101 thru 120", -- pages qui restent allumées au rappel
+  commonFrom    = 101,            -- (les mêmes, pour ne pas y placer une song)
+  commonTo      = 120,
   speedMaster   = "3.1",          -- speed master réglé au BPM
 
   confMain      = "MAIN SEQUENCE",
@@ -355,6 +358,15 @@ local function askSetup(v, errorText)
   }
 end
 
+-- Ajoute « Page 3 « nom » » à la liste si l'emplacement est occupé
+local function busyAdd(busy, poolName, label, no)
+  local p = pool(poolName)
+  local o = p and no and p[no]
+  if not o then return end
+  local nm = o.name and tostring(o.name) or ""
+  busy[#busy + 1] = label .. " " .. no .. ((nm ~= "") and (" « " .. nm .. " »") or "")
+end
+
 -- Renvoie un texte d'erreur bloquante, plus la liste des emplacements occupés.
 local function validate(v)
   if v.name == "" then return "Donne un nom à la song." end
@@ -365,17 +377,10 @@ local function validate(v)
   if v.cues < 1 then return "Il faut au moins 1 cue de song." end
 
   local busy = {}
-  local function add(poolName, label, no)
-    local p = pool(poolName)
-    local o = p and p[no]
-    if not o then return end
-    local nm = o.name and tostring(o.name) or ""
-    busy[#busy + 1] = label .. " " .. no .. ((nm ~= "") and (" « " .. nm .. " »") or "")
-  end
-  add("Pages", "Page", v.page)
-  for s = v.seq, v.seq + v.extras do add("Sequences", "Séquence", s) end
-  add("Macros", "Macro", v.macro)
-  if v.tcOn then add("Timecodes", "Timecode", v.tcNo) end
+  busyAdd(busy, "Pages", "Page", v.page)
+  for s = v.seq, v.seq + v.extras do busyAdd(busy, "Sequences", "Séquence", s) end
+  busyAdd(busy, "Macros", "Macro", v.macro)
+  if v.tcOn then busyAdd(busy, "Timecodes", "Timecode", v.tcNo) end
   return nil, busy
 end
 
@@ -605,6 +610,23 @@ local function buildSongMacro(v, warnings)
   end
 end
 
+-- Executors de la song sur la page en cours : main sur 216, extras sur 121...
+-- (aussi pour la page d'une song dupliquée)
+local function assignSongExecs(seq, extras)
+  local lastExtra = seq + extras
+  C("Assign Sequence " .. seq .. " At Executor " .. CFG.execMain)
+  if extras > 0 then
+    C("Assign Sequence " .. (seq + 1) .. " Thru " .. lastExtra
+      .. " At Executor " .. CFG.execExtraFrom .. " Thru " .. (CFG.execExtraFrom + extras - 1))
+    C('Assign Configuration "' .. CFG.confExtras .. '" At Executor '
+      .. CFG.execExtraFrom .. " Thru " .. (CFG.execExtraFrom + extras - 1))
+    C('Assign Appearance "' .. appName("extras") .. '" At Executor '
+      .. CFG.execExtraFrom .. " Thru " .. (CFG.execExtraFrom + extras - 1))
+  end
+  C('Assign Configuration "' .. CFG.confMain .. '" At Executor ' .. CFG.execMain)
+  C('Assign Appearance "' .. appName("main") .. '" At Executor ' .. CFG.execMain)
+end
+
 local function createBody(v, warnings)
   local lastExtra = v.seq + v.extras
   local cueBO, cueOffTC = v.cues + 1, v.cues + 2
@@ -624,17 +646,7 @@ local function createBody(v, warnings)
   end
 
   -- 3. Executors
-  C("Assign Sequence " .. v.seq .. " At Executor " .. CFG.execMain)
-  if v.extras > 0 then
-    C("Assign Sequence " .. (v.seq + 1) .. " Thru " .. lastExtra
-      .. " At Executor " .. CFG.execExtraFrom .. " Thru " .. (CFG.execExtraFrom + v.extras - 1))
-    C('Assign Configuration "' .. CFG.confExtras .. '" At Executor '
-      .. CFG.execExtraFrom .. " Thru " .. (CFG.execExtraFrom + v.extras - 1))
-    C('Assign Appearance "' .. appName("extras") .. '" At Executor '
-      .. CFG.execExtraFrom .. " Thru " .. (CFG.execExtraFrom + v.extras - 1))
-  end
-  C('Assign Configuration "' .. CFG.confMain .. '" At Executor ' .. CFG.execMain)
-  C('Assign Appearance "' .. appName("main") .. '" At Executor ' .. CFG.execMain)
+  assignSongExecs(v.seq, v.extras)
 
   -- 4. Cues de la séquence main (mêmes commandes que la macro d'origine)
   C("Select Executor " .. CFG.execMain)
@@ -661,23 +673,598 @@ local function createBody(v, warnings)
 
 end
 
-local function create(v)
+-- Toute une opération dans une seule liste Oops : un Oops l'annule en entier
+-- (sauf ce qui est écrit par Lua sur des objets qui existaient avant :
+-- commandes des cues et lignes de macro d'une song renommée).
+local function runUndo(title, body, ...)
   local warnings = {}
   cmdErrors = {}
-  -- Toute la création dans une seule liste Oops : un Oops annule la song entière
-  local okU, u = pcall(CreateUndo, "Song Creator " .. v.name)
+  local okU, u = pcall(CreateUndo, title)
   undo = okU and u or nil
-  local ok, err = pcall(createBody, v, warnings)
+  local ok, res = pcall(body, warnings, ...)
   if undo then pcall(CloseUndo, undo) end
   undo = nil
   for _, e in ipairs(cmdErrors) do
     warnings[#warnings + 1] = "Commande refusee : " .. e
   end
+  if not ok then error(res, 0) end
+  return warnings, res
+end
+
+local function create(v)
+  local warnings = runUndo("Song Creator " .. v.name, function(wn) createBody(v, wn) end)
   for _, r in ipairs(missingAppearances(v)) do
     warnings[#warnings + 1] = r.label .. ' : apparence "' .. appName(r.key) .. '" absente du show, pas de couleur'
   end
-  if not ok then error(err, 0) end
   return warnings
+end
+
+-- ---------------------------------------------------------------------------
+--  Songs existantes (0.7) : retrouver, renommer, dupliquer, supprimer
+--  Une song = une page et une séquence qui portent le même nom (ce que font
+--  le plugin et la macro d'origine). Extras = séquences qui suivent la main
+--  avec ce nom en note. Timecode et macro de rappel = ceux du même nom.
+-- ---------------------------------------------------------------------------
+local function noteOf(o)
+  local n
+  pcall(function() n = o:Get("Note") end)
+  if n == nil then pcall(function() n = o.note end) end
+  return trim(tostring(n or ""))
+end
+
+-- nom -> plus petit numéro qui le porte
+local function numbersByName(poolName)
+  local used, _, objs = readPool(poolName)
+  local byName = {}
+  for no, nm in pairs(used) do
+    nm = tostring(nm)
+    if nm ~= "" and (not byName[nm] or no < byName[nm]) then byName[nm] = no end
+  end
+  return byName, used, objs
+end
+
+local function findSongs()
+  local pages = readPool("Pages")
+  local seqByName, _, seqObjs = numbersByName("Sequences")
+  local tcByName = numbersByName("Timecodes")
+  local macroByName = numbersByName("Macros")
+  local nos = {}
+  for no in pairs(pages) do nos[#nos + 1] = no end
+  table.sort(nos)
+  local songs = {}
+  for _, p in ipairs(nos) do
+    local name = tostring(pages[p] or "")
+    local s = (name ~= "") and seqByName[name]
+    if s then
+      local k = 0
+      while k < CFG.maxExtras and seqObjs[s + k + 1] and noteOf(seqObjs[s + k + 1]) == name do
+        k = k + 1
+      end
+      songs[#songs + 1] = { name = name, page = p, seq = s, extras = k, seqObj = seqObjs[s],
+                            tc = tcByName[name], macro = macroByName[name] }
+    end
+  end
+  return songs
+end
+
+-- La même song relue dans le show (page et nom inchangés), nil si elle n'existe plus
+local function resolveSong(song)
+  if not song then return nil end
+  for _, s in ipairs(findSongs()) do
+    if s.page == song.page and s.name == song.name then return s end
+  end
+  return nil
+end
+
+-- Objets qui portent déjà ce nom (Page 3, Séquence 101...)
+local NAMED_POOLS = { { "Pages", "Page" }, { "Sequences", "Séquence" },
+                      { "Timecodes", "Timecode" }, { "Macros", "Macro" } }
+local function nameUsers(name)
+  local t = {}
+  for _, p in ipairs(NAMED_POOLS) do
+    local used = readPool(p[1])
+    local nos = {}
+    for no, nm in pairs(used) do
+      if tostring(nm) == name then nos[#nos + 1] = no end
+    end
+    table.sort(nos)
+    for _, no in ipairs(nos) do t[#t + 1] = p[2] .. " " .. no end
+  end
+  return t
+end
+
+-- « 216 », « 216 et 121 », « 216 et 121 à 124 »
+local function execText(extras, sep)
+  local first, last = CFG.execExtraFrom, CFG.execExtraFrom + extras - 1
+  if extras <= 0 then return tostring(CFG.execMain) end
+  return CFG.execMain .. (sep or " et ") .. first .. ((last > first) and (" à " .. last) or "")
+end
+
+local function seqRange(seq, extras)
+  return (extras > 0) and (seq .. " Thru " .. (seq + extras)) or tostring(seq)
+end
+
+-- Remplacement de texte simple (sans motif Lua), renvoie aussi le nombre
+local function replacePlain(s, a, b)
+  local out, i, n = {}, 1, 0
+  while true do
+    local j, k = s:find(a, i, true)
+    if not j then break end
+    out[#out + 1] = s:sub(i, j - 1)
+    out[#out + 1] = b
+    i, n = k + 1, n + 1
+  end
+  out[#out + 1] = s:sub(i)
+  return table.concat(out), n
+end
+
+-- Notes des séquences : par commande (comme à la création), puis vérifiées
+-- et posées par Lua si la note n'est pas exactement le nom.
+local function setNotes(seq, extras, name, warnings)
+  C('Note Sequence ' .. seqRange(seq, extras) .. ' "' .. name .. '"')
+  for n = seq, seq + extras do
+    local o = pool("Sequences")[n]
+    if o and noteOf(o) ~= name and not setChecked(o, "Note", name) then
+      warnings[#warnings + 1] = "Note de la séquence " .. n .. " non posée"
+    end
+  end
+end
+
+-- Objets qui portent une commande : parts des cues (la part 0 sur 2.3.2),
+-- ou la cue elle-même si ses parts n'en ont pas.
+local function cueCommandHolders(seq, extras)
+  local list = {}
+  for n = seq, seq + extras do
+    local sq = pool("Sequences")[n]
+    local okC, cues = pcall(function() return sq:Children() end)
+    for _, cue in ipairs(okC and type(cues) == "table" and cues or {}) do
+      local found = false
+      local okP, parts = pcall(function() return cue:Children() end)
+      for _, part in ipairs(okP and type(parts) == "table" and parts or {}) do
+        if propName(part, "Command") ~= false then list[#list + 1] = part; found = true end
+      end
+      if not found and propName(cue, "Command") ~= false then list[#list + 1] = cue end
+    end
+  end
+  return list
+end
+
+local function macroLines(macroNo)
+  local m = macroNo and pool("Macros")[macroNo]
+  local okC, lines = pcall(function() return m:Children() end)
+  return okC and type(lines) == "table" and lines or {}
+end
+
+-- Remplace "ancien nom" (entre guillemets) par "nouveau nom" dans les
+-- commandes. dry = true : compte seulement. Renvoie le nombre de commandes.
+local function renameInCommands(holders, old, new, warnings, dry)
+  local oldQ, newQ = '"' .. old .. '"', '"' .. new .. '"'
+  local count = 0
+  for _, o in ipairs(holders) do
+    local okG, cmd = pcall(function() return o:Get("Command") end)
+    cmd = (okG and cmd ~= nil) and tostring(cmd) or ""
+    if cmd:find(oldQ, 1, true) then
+      count = count + 1
+      if not dry then
+        local newCmd = trim((replacePlain(cmd, oldQ, newQ)))
+        if setChecked(o, "Command", newCmd) then
+          log[#log + 1] = "(lua) " .. cmd .. "  ->  " .. newCmd
+        else
+          warnings[#warnings + 1] = "Commande non modifiée : " .. cmd
+        end
+      end
+    end
+  end
+  return count
+end
+
+local function currentSongVar()
+  local ok, v = pcall(function() return GetVar(GlobalVars(), "currentSong") end)
+  return ok and v ~= nil and tostring(v) or nil
+end
+
+-- ---- Renommer ----
+local function renameBody(warnings, s, new)
+  local q = '"' .. new .. '"'
+  C("Label Page " .. s.page .. " " .. q)
+  C("Label Sequence " .. s.seq .. " " .. q)
+  setNotes(s.seq, s.extras, new, warnings)
+  if s.tc then C("Label Timecode " .. s.tc .. " " .. q) end
+  if s.macro then C("Label Macro " .. s.macro .. " " .. q) end
+  local nCues = renameInCommands(cueCommandHolders(s.seq, s.extras), s.name, new, warnings)
+  local nMacro = renameInCommands(macroLines(s.macro), s.name, new, warnings)
+  if currentSongVar() == s.name then C("SetGlobalVariable currentSong " .. q) end
+  return { "Page " .. s.page .. ", séquence " .. s.seq .. " et notes : « " .. new .. " »",
+           s.tc and ("Timecode " .. s.tc .. " : « " .. new .. " »") or "Pas de timecode",
+           s.macro and ("Macro " .. s.macro .. " : « " .. new .. " »") or "Pas de macro de rappel",
+           nCues .. " commande(s) de cue et " .. nMacro .. " ligne(s) de macro modifiée(s)" }
+end
+
+local function renameSong(s, new)
+  return runUndo("Song Creator renommer " .. s.name, renameBody, s, new)
+end
+
+-- ---- Supprimer ----
+local function deleteBody(warnings, s)
+  if s.macro then C("Delete Macro " .. s.macro .. " /NoConfirmation") end
+  if s.tc then C("Delete Timecode " .. s.tc .. " /NoConfirmation") end
+  C("Delete Page " .. s.page .. " /NoConfirmation")
+  C("Delete Sequence " .. seqRange(s.seq, s.extras) .. " /NoConfirmation")
+  local left = {}
+  if exists("Pages", s.page) then left[#left + 1] = "Page " .. s.page end
+  for n = s.seq, s.seq + s.extras do
+    if exists("Sequences", n) then left[#left + 1] = "Séquence " .. n end
+  end
+  if s.tc and exists("Timecodes", s.tc) then left[#left + 1] = "Timecode " .. s.tc end
+  if s.macro and exists("Macros", s.macro) then left[#left + 1] = "Macro " .. s.macro end
+  if #left > 0 then
+    warnings[#warnings + 1] = "Toujours dans le show : " .. table.concat(left, ", ")
+  end
+  return { "Page " .. s.page .. " supprimée",
+           "Séquence" .. (s.extras > 0 and ("s " .. s.seq .. " à " .. (s.seq + s.extras)) or (" " .. s.seq))
+             .. " supprimée" .. (s.extras > 0 and "s" or ""),
+           s.tc and ("Timecode " .. s.tc .. " supprimé") or "Pas de timecode",
+           s.macro and ("Macro " .. s.macro .. " supprimée") or "Pas de macro de rappel",
+           "Un Oops remet toute la song" }
+end
+
+local function deleteSong(s)
+  return runUndo("Song Creator supprimer " .. s.name, deleteBody, s)
+end
+
+-- ---- Dupliquer : liens du timecode copié ----
+local function addrOf(h)
+  local ok, a = pcall(function() return ToAddr(h, false) end)
+  if not ok or type(a) ~= "string" then ok, a = pcall(function() return h:ToAddr() end) end
+  return (ok and type(a) == "string") and a or nil
+end
+
+local function classOf(o)
+  local ok, c = pcall(function() return o:GetClass() end)
+  return ok and tostring(c) or "?"
+end
+
+-- Valeur d'une propriété quand c'est un lien vers un autre objet (handle)
+local function linkValue(o, pn)
+  local ok, v = pcall(function() return o:Get(pn) end)
+  if ok and type(v) == "userdata" then return v end
+  ok, v = pcall(function() return o[pn] end)
+  if ok and type(v) == "userdata" then return v end
+  return nil
+end
+
+-- Adresse d'un objet de l'ancienne song -> même objet dans la copie :
+-- « Sequence 101 Cue 3 » -> « Sequence 201 Cue 3 » ; un executor de
+-- l'ancienne page -> le même executor sur la nouvelle page.
+local function remapAddr(addr, map)
+  local changed = false
+  local out = addr:gsub("(Sequence%s+)(%d+)", function(pre, n)
+    n = tonumber(n)
+    if n >= map.oldSeq and n <= map.oldSeq + map.extras then
+      changed = true
+      return pre .. (n - map.oldSeq + map.newSeq)
+    end
+  end)
+  out = out:gsub("(Page%s+)(%d+)", function(pre, n)
+    if tonumber(n) == map.oldPage then changed = true; return pre .. map.newPage end
+  end)
+  out = out:gsub("(Executor%s+)(%d+)(%.)", function(pre, n, dot)
+    if tonumber(n) == map.oldPage then changed = true; return pre .. map.newPage .. dot end
+  end)
+  return changed and out or nil
+end
+
+-- Identité d'un objet MA : même objet, même clé
+local function handleKey(h)
+  local ok, n = pcall(HandleToInt, h)
+  if ok and n ~= nil then return n end
+  return tostring(h)
+end
+
+-- Ancien objet -> objet copié : séquences de la song avec leurs cues et
+-- parts (la copie garde le même ordre), page et executors (même numéro).
+local function copyMap(map)
+  local t = {}
+  local function kids(o)
+    local ok, k = pcall(function() return o:Children() end)
+    return (ok and type(k) == "table") and k or {}
+  end
+  local function pair(a, b, depth)
+    if not a or not b then return end
+    t[handleKey(a)] = b
+    if depth > 0 then
+      local kb = kids(b)
+      for i, c in ipairs(kids(a)) do pair(c, kb[i], depth - 1) end
+    end
+  end
+  for n = 0, map.extras do
+    pair(pool("Sequences")[map.oldSeq + n], pool("Sequences")[map.newSeq + n], 2)
+  end
+  local oldP, newP = pool("Pages")[map.oldPage], pool("Pages")[map.newPage]
+  if oldP and newP then
+    t[handleKey(oldP)] = newP
+    local byNo = {}
+    for _, e in ipairs(kids(newP)) do
+      local no
+      pcall(function() no = tonumber(e.no) end)
+      if no then byNo[no] = e end
+    end
+    for _, e in ipairs(kids(oldP)) do
+      local no
+      pcall(function() no = tonumber(e.no) end)
+      if no and byNo[no] then t[handleKey(e)] = byNo[no] end
+    end
+  end
+  return t
+end
+
+-- Rebranche une propriété sur le nouvel objet, vérifié par relecture.
+-- Trois façons : le handle, l'adresse en texte, l'adresse MA interne. La
+-- façon qui a marché passe en premier pour les liens suivants, celles qui
+-- ont échoué à côté d'elle ne sont plus essayées (pas une ligne rouge par event).
+local function relink(o, pn, oldH, newH, newAddr, ways)
+  if not newH and newAddr then
+    pcall(function() local l = ObjectList(newAddr); newH = l and l[1] end)
+    if type(newH) ~= "userdata" then newH = nil end
+  end
+  local target = newH and handleKey(newH)
+  local targetAddr = newAddr or (newH and addrOf(newH))
+  local function isNew()
+    local h = linkValue(o, pn)
+    if not h then return false end
+    if target ~= nil and handleKey(h) == target then return true end
+    return targetAddr ~= nil and addrOf(h) == targetAddr
+  end
+  local function try(way)
+    if way == "handle" and newH then
+      pcall(function() o[pn] = newH end)
+    elseif way == "adresse" and targetAddr then
+      pcall(function() o:Set(pn, targetAddr) end)
+    elseif way == "adresse MA" and newH then
+      local okA, root = pcall(function() return newH:Addr() end)
+      if not (okA and type(root) == "string") then return false end
+      pcall(function() o:Set(pn, root) end)
+    else
+      return false
+    end
+    return isNew()
+  end
+  local w = ways[pn]
+  if not w then w = { skip = {} }; ways[pn] = w end
+  local order = {}
+  if w.best then order[1] = w.best end
+  for _, way in ipairs({ "handle", "adresse", "adresse MA" }) do
+    if way ~= w.best and not w.skip[way] then order[#order + 1] = way end
+  end
+  local tried = {}
+  for _, way in ipairs(order) do
+    if try(way) then
+      for _, f in ipairs(tried) do w.skip[f] = true end
+      w.best = way
+      return true
+    end
+    tried[#tried + 1] = way
+  end
+  -- échec : remettre l'ancien lien s'il a bougé (sur la copie seulement)
+  local oldKey = handleKey(oldH)
+  local function isOld()
+    local h = linkValue(o, pn)
+    return h ~= nil and handleKey(h) == oldKey
+  end
+  if not isOld() then pcall(function() o[pn] = oldH end) end
+  if not isOld() then
+    local a = addrOf(oldH)
+    if a then pcall(function() o:Set(pn, a) end) end
+  end
+  return false
+end
+
+-- Pour le System Monitor : propriétés d'un objet (diagnostic sur console)
+local function dumpProps(o)
+  local t = {}
+  local okC, n = pcall(function() return o:PropertyCount() end)
+  for i = 0, (okC and type(n) == "number") and (n - 1) or -1 do
+    local okN, pn = pcall(function() return o:PropertyName(i) end)
+    if okN and type(pn) == "string" then
+      local h = linkValue(o, pn)
+      local val
+      if h then
+        val = "@" .. (addrOf(h) or "?")
+      else
+        local okV, v = pcall(function() return o:Get(pn) end)
+        val = okV and tostring(v) or "?"
+      end
+      t[#t + 1] = pn .. "=" .. val:sub(1, 40)
+    end
+  end
+  return table.concat(t, ", ")
+end
+
+-- Parcourt tout le timecode copié et rebranche chaque lien qui vise un objet
+-- de l'ancienne song (séquence, cue, part, page, executor) sur le même objet
+-- de la copie. Reconnu par identité (copyMap), sinon par son adresse.
+-- Deuxième passage : compte les liens qui visent encore l'ancienne song.
+local function retargetTimecode(tcNo, map)
+  local tc = pool("Timecodes")[tcNo]
+  local st = { objects = 0, links = 0, ok = 0, failed = 0, readonly = 0, left = 0 }
+  local cmap = copyMap(map)
+  local ways = {}
+  local firstOfClass, classes, visits = {}, {}, 0
+  local function walk(o, fix)
+    if fix then
+      st.objects = st.objects + 1
+      local cls = classOf(o)
+      if not firstOfClass[cls] then firstOfClass[cls] = o; classes[#classes + 1] = cls end
+    end
+    visits = visits + 1
+    if visits % 100 == 0 then coroutine.yield(0) end   -- gros timecode : MA respire
+    local okC, n = pcall(function() return o:PropertyCount() end)
+    for i = 0, (okC and type(n) == "number") and (n - 1) or -1 do
+      local okN, pn = pcall(function() return o:PropertyName(i) end)
+      local h = okN and type(pn) == "string" and pn ~= "" and linkValue(o, pn)
+      local newH, addr, newAddr
+      if h then
+        newH = cmap[handleKey(h)]
+        if not newH then
+          addr = addrOf(h)
+          newAddr = addr and remapAddr(addr, map)
+        end
+      end
+      if (newH or newAddr) and not fix then
+        st.left = st.left + 1
+        if st.left <= 5 then
+          Printf("[SongCreator] TC " .. tcNo .. " : " .. classOf(o) .. "." .. pn .. " vise encore "
+                 .. tostring(addr or addrOf(h)))
+        end
+      elseif newH or newAddr then
+        st.links = st.links + 1
+        local ro = false
+        pcall(function() local inf = o:PropertyInfo(i); ro = inf and inf.ReadOnly and true or false end)
+        if ro then
+          st.readonly = st.readonly + 1
+        elseif relink(o, pn, h, newH, newAddr, ways) then
+          st.ok = st.ok + 1
+        else
+          st.failed = st.failed + 1
+          if st.failed <= 5 then
+            Printf("[SongCreator] TC " .. tcNo .. " : " .. classOf(o) .. "." .. pn .. " non rebranche ("
+                   .. tostring(addr or addrOf(h)) .. " -> " .. tostring(newAddr or (newH and addrOf(newH))) .. ")")
+          end
+        end
+      end
+    end
+    local okK, kids = pcall(function() return o:Children() end)
+    for _, c in ipairs(okK and type(kids) == "table" and kids or {}) do walk(c, fix) end
+  end
+  if tc then
+    walk(tc, true)
+    walk(tc, false)
+  end
+  local used = {}
+  for pn, w in pairs(ways) do used[#used + 1] = pn .. " par " .. tostring(w.best or "-") end
+  Printf(string.format("[SongCreator] TC %d : %d objets lus, %d liens vers la song d'origine, "
+    .. "%d rebranches, %d en echec, %d en lecture seule, %d visent encore l'origine (%s)",
+    tcNo, st.objects, st.links, st.ok, st.failed, st.readonly, st.left, table.concat(used, ", ")))
+  -- rien trouvé ou pas tout rebranché : on écrit la structure pour comprendre
+  if st.left > 0 or st.failed > 0 or (st.links == 0 and st.objects > 1) then
+    for i = 1, math.min(#classes, 10) do
+      Printf("[SongCreator] TC classe " .. classes[i] .. " : " .. dumpProps(firstOfClass[classes[i]]))
+    end
+  end
+  return st
+end
+
+-- Executors de la page copiée qui visent encore une séquence de l'ancienne
+-- song, en dehors de 216 et 121... (refaits par assignSongExecs)
+local function assignedSeqNo(ex)
+  local o
+  pcall(function() o = ex:GetAssignedObj() end)
+  if type(o) ~= "userdata" then o = linkValue(ex, "Object") end
+  if type(o) ~= "userdata" then return nil end
+  local cls = classOf(o)
+  if cls ~= "?" and cls ~= "Sequence" then return nil end
+  local no
+  pcall(function() no = tonumber(o.no) end)
+  return no
+end
+
+local function relinkOtherExecs(map)
+  local page = pool("Pages")[map.newPage]
+  local std = { [CFG.execMain] = true }
+  for i = 0, map.extras - 1 do std[CFG.execExtraFrom + i] = true end
+  local n = 0
+  local okC, execs = pcall(function() return page:Children() end)
+  for _, ex in ipairs(okC and type(execs) == "table" and execs or {}) do
+    local exNo
+    pcall(function() exNo = tonumber(ex.no) end)
+    local sNo = assignedSeqNo(ex)
+    if exNo and sNo and not std[exNo] and sNo >= map.oldSeq and sNo <= map.oldSeq + map.extras then
+      C("Assign Sequence " .. (sNo - map.oldSeq + map.newSeq) .. " At Executor " .. exNo)
+      n = n + 1
+    end
+  end
+  return n
+end
+
+-- ---- Dupliquer ----
+-- d : { name, page, seq, macro, tcNo } (emplacements de la copie)
+local function duplicateBody(warnings, s, d)
+  local k = s.extras
+  local done = {}
+  local map = { oldSeq = s.seq, newSeq = d.seq, extras = k, oldPage = s.page, newPage = d.page }
+
+  -- 0. emplacements occupés (écrasement confirmé par un second appui) : vidés d'abord
+  if s.macro and exists("Macros", d.macro) then C("Delete Macro " .. d.macro .. " /NoConfirmation") end
+  if s.tc and exists("Timecodes", d.tcNo) then C("Delete Timecode " .. d.tcNo .. " /NoConfirmation") end
+  if exists("Pages", d.page) then C("Delete Page " .. d.page .. " /NoConfirmation") end
+  for n = d.seq, d.seq + k do
+    if exists("Sequences", n) then C("Delete Sequence " .. n .. " /NoConfirmation") end
+  end
+
+  -- 1. Séquences (main + extras, avec leurs cues)
+  C("Copy Sequence " .. seqRange(s.seq, k) .. " At " .. d.seq .. " /NoConfirmation")
+  if not exists("Sequences", d.seq) then
+    warnings[#warnings + 1] = "Séquence " .. s.seq .. " non copiée : duplication arrêtée"
+    return done
+  end
+  C('Label Sequence ' .. d.seq .. ' "' .. d.name .. '"')
+  setNotes(d.seq, k, d.name, warnings)
+  local nCues = renameInCommands(cueCommandHolders(d.seq, k), s.name, d.name, warnings)
+  done[#done + 1] = "Séquence" .. (k > 0 and ("s " .. d.seq .. " à " .. (d.seq + k)) or (" " .. d.seq))
+                 .. " (" .. nCues .. " commande(s) de cue avec le nouveau nom)"
+
+  -- 2. Page copiée, puis ses executors rebranchés sur les nouvelles séquences
+  C("Copy Page " .. s.page .. " At " .. d.page .. " /NoConfirmation")
+  if not exists("Pages", d.page) then
+    warnings[#warnings + 1] = "Page " .. s.page .. " non copiée : page " .. d.page .. " créée vide"
+    C("Store Page " .. d.page .. " /Overwrite")
+  end
+  C("Page " .. d.page)
+  C('Label Page ' .. d.page .. ' "' .. d.name .. '"')
+  assignSongExecs(d.seq, k)
+  local nOther = relinkOtherExecs(map)
+  done[#done + 1] = "Page " .. d.page .. ", executors " .. execText(k)
+                 .. ((nOther > 0) and (" + " .. nOther .. " autre(s)") or "")
+
+  -- 3. Timecode copié tel quel, puis ses liens rebranchés sur la copie
+  if s.tc then
+    C("Copy Timecode " .. s.tc .. " At " .. d.tcNo .. " /NoConfirmation")
+    if exists("Timecodes", d.tcNo) then
+      C('Label Timecode ' .. d.tcNo .. ' "' .. d.name .. '"')
+      local st = retargetTimecode(d.tcNo, map)
+      done[#done + 1] = "Timecode " .. d.tcNo .. " : " .. st.ok .. " lien(s) rebranché(s)"
+      if st.failed > 0 then
+        warnings[#warnings + 1] = "Timecode " .. d.tcNo .. " : " .. st.failed
+          .. " lien(s) non rebranché(s) (détail dans le System Monitor)"
+      end
+      if st.left > 0 then
+        warnings[#warnings + 1] = "Timecode " .. d.tcNo .. " : " .. st.left
+          .. " lien(s) visent encore la song d'origine (détail dans le System Monitor)"
+      elseif st.links == 0 and st.objects > 1 then
+        warnings[#warnings + 1] = "Timecode " .. d.tcNo .. " : aucun lien vers la song d'origine trouvé"
+          .. " (détail dans le System Monitor)"
+      end
+    else
+      warnings[#warnings + 1] = "Timecode " .. s.tc .. " non copié"
+    end
+  end
+
+  -- 4. Macro de rappel copiée, nom remplacé dans ses lignes
+  if s.macro then
+    C("Copy Macro " .. s.macro .. " At " .. d.macro .. " /NoConfirmation")
+    if exists("Macros", d.macro) then
+      C('Label Macro ' .. d.macro .. ' "' .. d.name .. '"')
+      local nLines = renameInCommands(macroLines(d.macro), s.name, d.name, warnings)
+      done[#done + 1] = "Macro " .. d.macro .. " (" .. nLines .. " ligne(s) avec le nouveau nom)"
+    else
+      warnings[#warnings + 1] = "Macro " .. s.macro .. " non copiée"
+    end
+  end
+  return done
+end
+
+local function duplicateSong(s, d)
+  return runUndo("Song Creator dupliquer " .. s.name, duplicateBody, s, d)
 end
 
 -- ---------------------------------------------------------------------------
@@ -929,10 +1516,15 @@ local function readFields(w)
   return v
 end
 
+-- Tout ce que l'on peut changer dans la fenêtre : un changement relance le récap
 local function signature(w)
-  local t = {}
+  local t = { w.mode or "", w.song and (w.song.page .. ":" .. w.song.name) or "-" }
   for _, k in ipairs(FIELD_ORDER) do t[#t + 1] = tostring(w.fields[k].Content) end
   t[#t + 1] = tostring(w.tcOn)
+  if w.sp then
+    t[#t + 1] = tostring(w.sp.name.Content)
+    for _, s in ipairs(SLOTS) do t[#t + 1] = tostring(w.dup.fields[s.key].Content) end
+  end
   return table.concat(t, "|")
 end
 
@@ -1083,7 +1675,10 @@ local function showPickLayer(w, on)
   quiet(w.frame, "Enabled", a)
   quiet(w.pick.layer, "Visible", b)
   quiet(w.pick.layer, "Enabled", b)
-  if not on then setTcButton(w) end   -- remet les champs timecode grisés si TC = Non
+  -- remet l'affichage du mode (panneaux, champs grisés), que MA a pu réactiver
+  if not on then
+    if w.restore then w.restore(w) else setTcButton(w) end
+  end
 end
 
 -- Remplit la liste : une case par numéro du pool. Toutes les listes marchent
@@ -1164,21 +1759,23 @@ local function paintPickLayer(poolName, paint)
   Printf("[SongCreator] liste " .. poolName .. " : " .. nColor .. " cases en couleur d'apparence")
 end
 
--- Choix d'un numéro dans la liste, dans la fenêtre principale. Renvoie
--- ok (la liste a pu s'ouvrir) et le numéro choisi (nil si Annuler).
-local function pickInWindow(w, poolName, current, block)
+-- Ouvre le calque liste et attend un clic. fill() remplit la liste et renvoie
+-- les couleurs d'apparence à poser ; onValue(valeur du clic) renvoie true et
+-- le résultat pour fermer la liste. Renvoie ok (la liste a pu s'ouvrir) et
+-- le résultat (nil si Annuler).
+local function runPickLayer(w, what, fill, onValue)
   loadColors()
-  local okBuild, used, paint = pcall(function()
+  local okBuild, paint = pcall(function()
     if not w.pick then buildPickLayer(w) end
-    return fillPickLayer(w, poolName, current, block)
+    return fill()
   end)
   if not okBuild then
     if w.pick then pcall(showPickLayer, w, false) end
-    return false, used
+    return false, paint
   end
   showPickLayer(w, true)
   coroutine.yield(0.1)
-  if IsObjectValid(w.base) then paintPickLayer(poolName, paint) end
+  if IsObjectValid(w.base) then paintPickLayer(what, paint or {}) end
 
   local chosen
   pickState.value = nil
@@ -1186,41 +1783,276 @@ local function pickInWindow(w, poolName, current, block)
     coroutine.yield(0.05)
     local v = pickState.value
     pickState.value = nil
-    if v == "cancel" then
-      break
-    elseif v and tostring(v):find("^full:") then
-      local n = tonumber(tostring(v):sub(6))
-      local stop
-      for k = n + 1, n + block - 1 do
-        if used[k] then stop = k; break end
-      end
-      w.pick.msg.Text = "Séquence " .. n .. " : pas la place pour la main et ses " .. (block - 1)
-                     .. " extras" .. (stop and (", la " .. stop .. " est occupée.") or ".")
-      quiet(w.pick.msg, "TextColor", "Global.WarningText")
-    elseif v then
-      chosen = tonumber(v)
-      if chosen then break end
+    if v == "cancel" then break end
+    if v then
+      local done, res = onValue(tostring(v))
+      if done then chosen = res; break end
     end
   end
   if IsObjectValid(w.base) then showPickLayer(w, false) end
   return true, chosen
 end
 
+-- Choix d'un numéro dans la liste d'un pool, dans la fenêtre principale
+local function pickInWindow(w, poolName, current, block)
+  local used = {}
+  return runPickLayer(w, poolName,
+    function()
+      local u, paint = fillPickLayer(w, poolName, current, block)
+      used = u
+      return paint
+    end,
+    function(v)
+      if v:find("^full:") then
+        local n = tonumber(v:sub(6))
+        local stop
+        for k = n + 1, n + block - 1 do
+          if used[k] then stop = k; break end
+        end
+        w.pick.msg.Text = "Séquence " .. n .. " : pas la place pour la main et ses " .. (block - 1)
+                       .. " extras" .. (stop and (", la " .. stop .. " est occupée.") or ".")
+        quiet(w.pick.msg, "TextColor", "Global.WarningText")
+        return false
+      end
+      local n = tonumber(v)
+      return n ~= nil, n
+    end)
+end
+
 -- Choix dans la fenêtre principale ; liste native de MA si le calque ne peut
 -- pas se construire sur cette version.
-local function pickInSetup(w, p, current, block)
+local function pickInSetup(w, p, current, block, caller)
   if not w.pickFailed then
     local ok, res = pickInWindow(w, p.pool, current, block)
     if ok then return res end
     w.pickFailed = true   -- on ne retente pas : liste MA jusqu'à la fin
     Printf("[SongCreator] liste dans la fenetre indisponible (" .. tostring(res) .. "), liste MA")
   end
-  return pickWithPopupInput(p.pool, p.title, current, block, w.pickBtn[p.field])
+  return pickWithPopupInput(p.pool, p.title, current, block, caller or w.pickBtn[p.field])
+end
+
+-- ---- Liste des songs du show (même calque que les pools) ----
+local SONG_CELL = { w = 420, h = 54 }
+
+local function songLabel(s)
+  return s.name .. "   (page " .. s.page .. ", séq " .. s.seq .. ")"
+end
+
+local function fillSongLayer(w, songs, current)
+  local P = w.pick
+  P.title.Text = "Select Song"
+  P.msg.Text = ""
+  pcall(function() P.box:ClearUIChildren() end)
+  local width = tonumber(w.base.W) or UI.W
+  local cols = math.max(1, math.floor((width - 2 * PANEL - 50) / (SONG_CELL.w + PICK.gap)))
+  local paint = {}
+  for i, s in ipairs(songs) do
+    local col, row = (i - 1) % cols, math.floor((i - 1) / cols)
+    local b = P.box:Append("Button")
+    b.Anchors = "0,0"
+    b.W, b.H = SONG_CELL.w, SONG_CELL.h
+    b.X = 5 + col * (SONG_CELL.w + PICK.gap)
+    b.Y = 5 + row * (SONG_CELL.h + PICK.gap)
+    b.Text = songLabel(s)
+    local isCur = current ~= nil and current.page == s.page and current.name == s.name
+    local r, g, bl, a = appearanceColor(s.seqObj)
+    if r then paint[#paint + 1] = { b = b, r = r, g = g, bl = bl, a = a, current = isCur } end
+    quiet(b, "Font", UI.fontLabel)
+    quiet(b, "TextalignmentH", "Left")
+    quiet(b, "Padding", pad(10, 4, 0, 0))
+    quiet(b, "HasHover", "Yes")
+    b.PluginComponent = myHandle
+    b.Clicked = "SC_PickCell"
+    b.SignalValue = "song:" .. i
+    if isCur then quiet(b, "TextColor", "Global.Selected") end
+  end
+  if #songs == 0 then
+    P.msg.Text = "Aucune song dans ce show."
+    quiet(P.msg, "TextColor", "Global.WarningText")
+  end
+  P.legend.Text = #songs .. " song(s). Une song = une page et une séquence qui portent le même nom."
+  Printf("[SongCreator] liste des songs affichee : " .. #songs .. " song(s)")
+  return paint
+end
+
+-- Secours sans calque : liste native de MA (« Select Song »)
+local function pickSongPopup(songs, caller)
+  local items = {}
+  for i, s in ipairs(songs) do items[i] = songLabel(s) end
+  if #items == 0 then return nil end
+  local args = { title = "Song", caller = caller or (pickDisplay()), items = items,
+                 add_args = { FilterSupport = "Yes" } }
+  local ok, idx, value = pcall(PopupInput, args)
+  if not ok then
+    args.caller = (pickDisplay())
+    ok, idx, value = pcall(PopupInput, args)
+  end
+  if not ok then return nil end
+  if value then
+    for i, it in ipairs(items) do
+      if it == value then return songs[i] end
+    end
+  end
+  idx = tonumber(idx)
+  return idx and songs[idx + 1] or nil
+end
+
+local function pickSong(w)
+  local songs = findSongs()
+  if not w.pickFailed then
+    local ok, res = runPickLayer(w, "songs",
+      function() return fillSongLayer(w, songs, w.song) end,
+      function(v)
+        local i = tonumber(v:match("^song:(%d+)$") or "")
+        return (i ~= nil and songs[i] ~= nil), songs[i or 0]
+      end)
+    if ok then return res end
+    w.pickFailed = true
+    Printf("[SongCreator] liste dans la fenetre indisponible (" .. tostring(res) .. "), liste MA")
+  end
+  return pickSongPopup(songs, w.sp and w.sp.pickBtn)
 end
 
 -- Boîte MA de secours (sans fenêtre) : liste native de MA
 local function pickFromPool(poolName, title, current, block, caller)
   return pickWithPopupInput(poolName, title, current, block, caller)
+end
+
+-- ---------------------------------------------------------------------------
+--  Modes de la fenêtre (0.7) : Créer, Renommer, Dupliquer, Supprimer.
+--  Le centre change selon le mode (panneau Créer ou panneau Song, passés de
+--  l'un à l'autre avec Visible / Enabled comme le calque liste).
+-- ---------------------------------------------------------------------------
+local MODE_LIST = {
+  { key = "create", text = "Créer" },
+  { key = "rename", text = "Renommer" },
+  { key = "dup",    text = "Dupliquer" },
+  { key = "delete", text = "Supprimer" },
+}
+local MODES = {
+  create = { recap = "Ce qui sera créé",     go = "Créer la song",     armed = "Écraser et créer" },
+  rename = { recap = "Ce qui sera renommé",  go = "Renommer la song",  armed = "Renommer la song" },
+  dup    = { recap = "Ce qui sera copié",    go = "Dupliquer la song", armed = "Écraser et dupliquer" },
+  delete = { recap = "Ce qui sera supprimé", go = "Supprimer la song", armed = "Confirmer la suppression" },
+}
+
+local function show(obj, on)
+  if not obj then return end
+  quiet(obj, "Visible", on and "Yes" or "No")
+  quiet(obj, "Enabled", on and "Yes" or "No")
+end
+
+-- Ligne d'emplacement : libellé | numéro | état (libre / occupé) | ▾
+local function slotLine(parent, r, s, store, prefix, value)
+  local g = line(parent, r, { UI.labelW, UI.numW, false, UI.pickW })
+  label(g, cell(0, 0), s.label)
+  store.fields[s.key] = field(g, cell(1, 0), value, true)
+  -- l'état (libre / occupé) ouvre aussi la liste
+  local st = button(g, cell(2, 0), "", prefix .. s.key)
+  opt(st, { TextalignmentH = "Left", Font = UI.fontLabel, Padding = pad(12, 6, 0, 0) })
+  store.status[s.key] = st
+  local b = button(g, cell(3, 0), "", prefix .. s.key)
+  -- flèche de liste ; « ... » si l'icône n'existe pas sur cette version
+  if not pcall(function() b.Icon = "triangle_down" end) then b.Text = "..." end
+  store.pickBtn[s.key] = b
+end
+
+-- Panneau Song (Renommer, Dupliquer, Supprimer), dans la même case que Créer
+local function buildSongPanel(w, body)
+  local sp = grid(body, cell(1, 0), 1, 8)
+  opt(sp, { Margin = pad(8, 8, PANEL, PANEL) })
+  local sizes = { UI.sect, UI.row, 30, UI.gap, UI.row + 30, UI.gap, UI.sect + 4 * UI.row, false }
+  for i = 1, #sizes do
+    if sizes[i] then fixRow(sp, i, sizes[i]) else sp[1][i].SizePolicy = "Stretch" end
+  end
+
+  section(sp, cell(0, 0), "Song")
+  local g = line(sp, 1, { UI.labelW, false, UI.pickW })
+  label(g, cell(0, 0), "Song")
+  local songBtn = button(g, cell(1, 0), "", "pick_song")
+  opt(songBtn, { TextalignmentH = "Left", Font = UI.fontValue, Padding = pad(12, 6, 0, 0) })
+  local pickBtn = button(g, cell(2, 0), "", "pick_song")
+  if not pcall(function() pickBtn.Icon = "triangle_down" end) then pickBtn.Text = "..." end
+  local li = line(sp, 2, { UI.labelW, false })
+  local info = label(li, cell(1, 0), "", { Font = UI.fontSmall, TextColor = "Global.LabelText" })
+
+  -- nouveau nom (Renommer, Dupliquer)
+  local ng = grid(sp, cell(0, 4), 1, 2)
+  fixRow(ng, 1, UI.row)
+  fixRow(ng, 2, 30)
+  local l1 = line(ng, 0, { UI.labelW, false })
+  label(l1, cell(0, 0), "Nouveau nom")
+  local name = field(l1, cell(1, 0), "", false)
+  local l2 = line(ng, 1, { UI.labelW, false })
+  local maName = label(l2, cell(1, 0), "", { Font = UI.fontSmall, TextColor = "Global.LabelText" })
+
+  -- emplacements de la copie (Dupliquer)
+  local sg = grid(sp, cell(0, 6), 1, 5)
+  fixRow(sg, 1, UI.sect)
+  for r = 2, 5 do fixRow(sg, r, UI.row) end
+  section(sg, cell(0, 0), "Emplacements de la copie")
+  w.dup = { fields = {}, status = {}, pickBtn = {} }
+  for i, s in ipairs(SLOTS) do slotLine(sg, i, s, w.dup, "dpick_", "") end
+
+  w.sp = { panel = sp, songBtn = songBtn, pickBtn = pickBtn, info = info, name = name,
+           maName = maName, nameGroup = ng, slotGroup = sg }
+  show(sp, false)
+end
+
+-- Champs timecode et macro de la copie : grisés si la song n'en a pas
+local function setDupSlotsEnabled(w)
+  local s = w.song
+  for _, k in ipairs({ "tcNo", "macro" }) do
+    local has = s ~= nil and ((k == "tcNo" and s.tc) or (k == "macro" and s.macro)) and true or false
+    local en = has and "Yes" or "No"
+    quiet(w.dup.fields[k], "Enabled", en)
+    quiet(w.dup.status[k], "Enabled", en)
+    quiet(w.dup.pickBtn[k], "Enabled", en)
+  end
+end
+
+-- Affichage du mode en cours : panneau du centre, boutons, titres
+local function applyView(w)
+  local m = w.mode
+  show(w.createPanel, m == "create")
+  show(w.sp.panel, m ~= "create")
+  show(w.sp.nameGroup, m == "rename" or m == "dup")
+  show(w.sp.slotGroup, m == "dup")
+  for key, b in pairs(w.modeBtn) do
+    quiet(b, "TextColor", (key == m) and "Global.Selected" or "Global.Text")
+  end
+  w.recapTitle.Text = MODES[m].recap
+  quiet(w.defaultsBtn, "Enabled", (m ~= "delete") and "Yes" or "No")
+  quiet(w.defaultsBtn, "TextColor", (m ~= "delete") and "Global.Text" or "Global.Disabled")
+  if m == "create" then setTcButton(w) end
+  if m == "dup" then setDupSlotsEnabled(w) end
+end
+
+-- Bouton principal : action du mode, confirmation (« armed »), ou Fermer
+local function setGo(w, state)
+  local M = MODES[w.mode]
+  if state == "done" then
+    w.createBtn.Text = "Fermer"
+    w.createBtn.SignalValue = "cancel"
+  else
+    w.createBtn.Text = (state == "armed") and M.armed or M.go
+    w.createBtn.SignalValue = "go"
+  end
+  -- Supprimer : bouton gris à texte rouge ; on ne touche au texte des autres
+  -- modes que pour enlever ce rouge
+  if w.mode == "delete" and state ~= "done" then
+    quiet(w.createBtn, "BackColor", COL.back)
+    quiet(w.createBtn, "TextColor", "Global.ErrorText")
+    w.goRed = true
+  else
+    quiet(w.createBtn, "BackColor", COL.please)
+    if w.goRed then
+      local tc = w.goText
+      if tc == nil or tc == "" then tc = "Global.Text" end
+      quiet(w.createBtn, "TextColor", tc)
+      w.goRed = false
+    end
+  end
 end
 
 -- Construit la fenêtre ; une erreur ici fait passer à la boîte MA de secours.
@@ -1274,24 +2106,24 @@ local function buildSetupWindow(v)
   body[2][2].SizePolicy = "Stretch"
   fixCol(body, 3, UI.recapW)
 
-  -- Colonne des modes (les autres modes viendront plus tard)
+  -- Colonne des modes
   local modes = grid(body, cell(0, 0), 1, 6)
   opt(modes, { Margin = pad(PANEL, 2, PANEL, PANEL) })
   fixRow(modes, 1, UI.sect)
   for r = 2, 5 do fixRow(modes, r, UI.row) end
   modes[1][6].SizePolicy = "Stretch"
   section(modes, cell(0, 0), "Mode")
-  local bCreate = button(modes, cell(0, 1), "Créer")
-  opt(bCreate, { TextColor = "Global.Selected", TextalignmentH = "Left", Padding = pad(14, 4, 0, 0) })
-  for i, t in ipairs({ "Renommer", "Dupliquer", "Supprimer" }) do
-    local b = button(modes, cell(0, i + 1), t)
-    opt(b, { Enabled = "No", TextColor = "Global.Disabled", TextalignmentH = "Left",
-             Padding = pad(14, 4, 0, 0), Font = UI.fontLabel })
+  w.modeBtn = {}
+  for i, m in ipairs(MODE_LIST) do
+    local b = button(modes, cell(0, i), m.text, "mode_" .. m.key)
+    opt(b, { TextalignmentH = "Left", Padding = pad(14, 4, 0, 0) })
+    w.modeBtn[m.key] = b
   end
 
   -- Centre : la song, les emplacements, les réglages
   local main = grid(body, cell(1, 0), 1, 15)
   opt(main, { Margin = pad(8, 8, PANEL, PANEL) })
+  w.createPanel = main
   local sizes = { UI.sect, UI.row, 30, UI.gap, UI.sect, UI.row, UI.row, UI.row, UI.row,
                   UI.gap, UI.sect, UI.row, UI.row, false, 30 }
   for i = 1, #sizes do
@@ -1306,19 +2138,7 @@ local function buildSetupWindow(v)
   w.maName = label(lm, cell(1, 0), "", { Font = UI.fontSmall, TextColor = "Global.LabelText" })
 
   section(main, cell(0, 4), "Emplacements")
-  for i, s in ipairs(SLOTS) do
-    local g = line(main, 4 + i, { UI.labelW, UI.numW, false, UI.pickW })
-    label(g, cell(0, 0), s.label)
-    w.fields[s.key] = field(g, cell(1, 0), v[s.key], true)
-    -- l'état (libre / occupé) ouvre aussi la liste
-    local st = button(g, cell(2, 0), "", "pick_" .. s.key)
-    opt(st, { TextalignmentH = "Left", Font = UI.fontLabel, Padding = pad(12, 6, 0, 0) })
-    w.status[s.key] = st
-    local b = button(g, cell(3, 0), "", "pick_" .. s.key)
-    -- flèche de liste ; « ... » si l'icône n'existe pas sur cette version
-    if not pcall(function() b.Icon = "triangle_down" end) then b.Text = "..." end
-    w.pickBtn[s.key] = b
-  end
+  for i, s in ipairs(SLOTS) do slotLine(main, 4 + i, s, w, "pick_", v[s.key]) end
 
   section(main, cell(0, 10), "Réglages")
   local r1 = line(main, 11, { UI.labelW, UI.numW, 24, UI.label2W, UI.numW, false })
@@ -1338,6 +2158,9 @@ local function buildSetupWindow(v)
         .. "   -   Speed Master " .. CFG.speedMaster,
         { TextColor = "Global.Disabled", Font = UI.fontSmall })
 
+  -- Centre, autres modes : la song existante
+  buildSongPanel(w, body)
+
   -- Droite : ce qui sera créé, puis les alertes
   local rc = grid(body, cell(2, 0), 1, 4)
   opt(rc, { Margin = pad(4, PANEL, PANEL, PANEL) })
@@ -1345,7 +2168,7 @@ local function buildSetupWindow(v)
   rc[1][2].SizePolicy = "Stretch"
   fixRow(rc, 3, UI.gap)
   fixRow(rc, 4, 110)
-  section(rc, cell(0, 0), "Ce qui sera créé")
+  w.recapTitle = section(rc, cell(0, 0), "Ce qui sera créé")
   -- une case par ligne, séparées comme les champs de gauche
   local rg = grid(rc, cell(0, 1), 1, RECAP_ROWS)
   w.recapRows = {}
@@ -1360,9 +2183,10 @@ local function buildSetupWindow(v)
   local ft = grid(frame, cell(0, 1), 4, 1)
   opt(ft, { Margin = pad(PANEL - 6, PANEL, 6, PANEL) })
   fixCol(ft, 1, UI.modesW - PANEL)
-  w.createBtn = button(ft, cell(1, 0), "Créer la song", "create", "ok")
+  w.createBtn = button(ft, cell(1, 0), "Créer la song", "go", "ok")
   opt(w.createBtn, { BackColor = COL.please })
-  button(ft, cell(2, 0), "Valeurs par défaut", "defaults", "undo")
+  pcall(function() w.goText = w.createBtn.TextColor end)   -- remise après Supprimer (texte rouge)
+  w.defaultsBtn = button(ft, cell(2, 0), "Valeurs par défaut", "defaults", "undo")
   button(ft, cell(3, 0), "Annuler", "cancel", "cancel")
 
   -- Coin de redimensionnement (bas droite)
@@ -1373,6 +2197,7 @@ local function buildSetupWindow(v)
     opt(rcorner, { AlignmentH = "Right", AlignmentV = "Bottom" })
   end)
 
+  w.mode = "create"
   setTcButton(w)
   return w
 end
@@ -1383,17 +2208,235 @@ local PICK_FIELDS = {
   pick_seq   = { field = "seq",   pool = "Sequences", title = "Sequence" },
   pick_tcNo  = { field = "tcNo",  pool = "Timecodes", title = "Timecode" },
 }
+local DUP_PICK = {
+  dpick_page  = PICK_FIELDS.pick_page,
+  dpick_macro = PICK_FIELDS.pick_macro,
+  dpick_seq   = PICK_FIELDS.pick_seq,
+  dpick_tcNo  = PICK_FIELDS.pick_tcNo,
+}
+
+-- ---- Panneau Song : contenu selon le mode ----
+local function songInfo(s)
+  local t = { "Séquence " .. s.seq .. ((s.extras > 0)
+                and (" + " .. s.extras .. " extras (" .. (s.seq + 1) .. " à " .. (s.seq + s.extras) .. ")")
+                or ", sans extras") }
+  t[#t + 1] = s.tc and ("timecode " .. s.tc) or "pas de timecode"
+  t[#t + 1] = s.macro and ("macro " .. s.macro) or "pas de macro"
+  return table.concat(t, "   -   ")
+end
+
+local function showSongRow(w)
+  local s, sp = w.song, w.sp
+  if s then
+    sp.songBtn.Text = s.name .. "   (page " .. s.page .. ")"
+    quiet(sp.songBtn, "TextColor", "Global.Text")
+    sp.info.Text = songInfo(s)
+  else
+    sp.songBtn.Text = w.lost and ("« " .. w.lost .. " » n'existe plus : choisis une song")
+                      or "Choisis une song"
+    quiet(sp.songBtn, "TextColor", "Global.LabelText")
+    sp.info.Text = "Une song = une page et une séquence qui portent le même nom."
+  end
+end
+
+-- Première page libre, en évitant les pages communes (101 à 120)
+local function freePage(from)
+  local n = firstFree("Pages", from)
+  if n >= CFG.commonFrom and n <= CFG.commonTo then n = firstFree("Pages", CFG.commonTo + 1) end
+  return n
+end
+
+-- Emplacements proposés pour la copie : les premiers libres après la song
+local function setDupDefaults(w, s)
+  local f = w.dup.fields
+  f.page.Content = tostring(freePage(s.page + 1))
+  f.seq.Content = tostring(firstFree("Sequences", s.seq + s.extras + 1, 1 + s.extras))
+  f.macro.Content = s.macro and tostring(firstFree("Macros", s.macro + 1)) or ""
+  f.tcNo.Content = s.tc and tostring(firstFree("Timecodes", s.tc + 1)) or ""
+  w.dupFor = s.page .. ":" .. s.name
+end
+
+-- Nouveau nom proposé : le nom actuel (Renommer), nom_copie (Dupliquer).
+-- Un nom tapé par Jo n'est pas remplacé en changeant de mode.
+local function enterMode(w, songChanged)
+  local s, sp = w.song, w.sp
+  if not s or w.mode == "create" then return end
+  local cur = sp.name.Content or ""
+  if w.mode ~= "delete" then
+    local auto = (w.mode == "dup") and (s.name .. "_copie") or s.name
+    if songChanged or cur == "" or cur == w.autoName then
+      sp.name.Content = auto
+      w.autoName = auto
+    end
+  end
+  if w.mode == "dup" and (songChanged or w.dupFor ~= s.page .. ":" .. s.name) then
+    setDupDefaults(w, s)
+  end
+end
+
+local function readDup(w)
+  local d = { name = cleanName(w.sp.name.Content or "") }
+  for _, sl in ipairs(SLOTS) do d[sl.key] = toInt(w.dup.fields[sl.key].Content) end
+  return d
+end
+
+-- Erreur bloquante sur le nouveau nom (nil si bon), et sa couleur
+local function checkNewName(name, s)
+  if name == "" or name == s.name then return "Tape le nouveau nom de la song.", "Global.LabelText" end
+  local users = nameUsers(name)
+  if #users > 0 then
+    return "Nom déjà utilisé : " .. table.concat(users, ", ") .. ".", "Global.ErrorText"
+  end
+  return nil
+end
+
+local function validateDup(s, d)
+  local err, color = checkNewName(d.name, s)
+  if err then return err, nil, color end
+  local k = s.extras
+  if not d.page then return "Numéro de page invalide." end
+  if not d.seq then return "Numéro de séquence invalide." end
+  if s.macro and not d.macro then return "Numéro de macro invalide." end
+  if s.tc and not d.tcNo then return "Numéro de timecode invalide." end
+  if d.page == s.page then return "La copie doit aller sur une autre page que la " .. s.page .. "." end
+  if d.seq <= s.seq + k and d.seq + k >= s.seq then
+    return "Les séquences de la copie (" .. d.seq .. " à " .. (d.seq + k) .. ") chevauchent celles de la song ("
+           .. s.seq .. " à " .. (s.seq + k) .. ")."
+  end
+  if s.macro and d.macro == s.macro then return "La copie doit avoir une autre macro que la " .. s.macro .. "." end
+  if s.tc and d.tcNo == s.tc then return "La copie doit avoir un autre timecode que le " .. s.tc .. "." end
+  local busy = {}
+  busyAdd(busy, "Pages", "Page", d.page)
+  for n = d.seq, d.seq + k do busyAdd(busy, "Sequences", "Séquence", n) end
+  if s.macro then busyAdd(busy, "Macros", "Macro", d.macro) end
+  if s.tc then busyAdd(busy, "Timecodes", "Timecode", d.tcNo) end
+  return nil, busy
+end
+
+-- Commandes qui contiennent le nom de la song (compté une fois par song)
+local function songCounts(w, s)
+  local key = s.page .. ":" .. s.name .. ":" .. s.seq .. ":" .. s.extras .. ":" .. tostring(s.macro)
+  if w.countKey ~= key then
+    w.countKey = key
+    w.counts = { cues = renameInCommands(cueCommandHolders(s.seq, s.extras), s.name, s.name, nil, true),
+                 macro = renameInCommands(macroLines(s.macro), s.name, s.name, nil, true) }
+  end
+  return w.counts
+end
+
+local function seqText(seq, extras)
+  return (extras > 0) and ("Séquences " .. seq .. " à " .. (seq + extras)) or ("Séquence " .. seq)
+end
+
+local function renameLines(w, s, new)
+  local nn = (new ~= "" and new ~= s.name) and new or "?"
+  local c = songCounts(w, s)
+  return table.concat({
+    "Page " .. s.page .. " -> « " .. nn .. " »",
+    "Séquence " .. s.seq .. " -> « " .. nn .. " »",
+    "Notes : " .. seqText(s.seq, s.extras):lower(),
+    s.tc and ("Timecode " .. s.tc .. " -> « " .. nn .. " »") or "Pas de timecode à ce nom",
+    s.macro and ("Macro " .. s.macro .. " -> « " .. nn .. " »") or "Pas de macro à ce nom",
+    c.cues .. " commande(s) de cue avec ce nom",
+    c.macro .. " ligne(s) de macro avec ce nom",
+    "Oops remet les noms, pas les commandes",
+  }, "\n")
+end
+
+local function dupLines(s, d)
+  local function q(x) return x and tostring(x) or "?" end
+  local k = s.extras
+  local t = {
+    seqText(s.seq, k) .. " -> " .. q(d.seq) .. ((k > 0 and d.seq) and (" à " .. (d.seq + k)) or ""),
+    "Page " .. s.page .. " -> " .. q(d.page),
+    "Exec " .. execText(k, ", ") .. " sur la page " .. q(d.page),
+    s.tc and ("Timecode " .. s.tc .. " -> " .. q(d.tcNo) .. ", liens rebranchés") or "Pas de timecode à copier",
+    s.macro and ("Macro " .. s.macro .. " -> " .. q(d.macro)) or "Pas de macro à copier",
+    "Nom « " .. ((d.name ~= "") and d.name or "?") .. " » partout",
+    "Un Oops annule toute la copie",
+  }
+  return table.concat(t, "\n")
+end
+
+local function deleteLines(s)
+  return table.concat({
+    "Page " .. s.page .. " « " .. s.name .. " »",
+    "Séquence " .. s.seq .. " (main)",
+    (s.extras > 0) and ("Extras " .. (s.seq + 1) .. " à " .. (s.seq + s.extras)) or "Pas d'extras",
+    s.tc and ("Timecode " .. s.tc) or "Pas de timecode à ce nom",
+    s.macro and ("Macro " .. s.macro) or "Pas de macro à ce nom",
+    "Un Oops remet toute la song",
+  }, "\n")
+end
+
+-- Rafraîchit le panneau Song et le récap ; renvoie l'état pour le bouton principal
+local function refreshSongMode(w)
+  local s = w.song and resolveSong(w.song)
+  if w.song and not s then w.lost = w.song.name end
+  w.song = s
+  showSongRow(w)
+  local m, sp = w.mode, w.sp
+  local newName = cleanName(sp.name.Content or "")
+  sp.maName.Text = (m ~= "delete" and newName ~= "") and ("Nom dans MA : " .. newName) or ""
+  if m == "dup" then setDupSlotsEnabled(w) end
+
+  if not s then
+    if m == "dup" then
+      for _, sl in ipairs(SLOTS) do w.dup.status[sl.key].Text = "" end
+    end
+    setRecap(w, "")
+    setAlert(w, "Choisis la song avec Song ▾.", "Global.LabelText")
+    return { err = "pas de song" }
+  end
+
+  if m == "rename" then
+    local err, color = checkNewName(newName, s)
+    setRecap(w, renameLines(w, s, newName))
+    setAlert(w, err or "Prêt.", err and color or "Global.SuccessText")
+    return { song = s, err = err, name = newName, busy = {} }
+
+  elseif m == "dup" then
+    local d = readDup(w)
+    for _, sl in ipairs(SLOTS) do
+      local txt, color
+      if sl.key == "tcNo" and not s.tc then
+        txt, color = "pas de timecode dans la song", "Global.Disabled"
+      elseif sl.key == "macro" and not s.macro then
+        txt, color = "pas de macro dans la song", "Global.Disabled"
+      else
+        txt, color = slotStatus(sl.pool, d[sl.key], (sl.key == "seq") and (1 + s.extras) or 1)
+      end
+      w.dup.status[sl.key].Text = txt
+      quiet(w.dup.status[sl.key], "TextColor", color)
+      quiet(w.dup.fields[sl.key], "TextColor", (color == "Global.WarningText") and color or "Global.Text")
+    end
+    local err, busy, color = validateDup(s, d)
+    setRecap(w, dupLines(s, d))
+    if err then
+      setAlert(w, err, color or "Global.ErrorText")
+    elseif #busy > 0 then
+      setAlert(w, "Déjà occupé, sera écrasé : " .. table.concat(busy, ", ") .. ".", "Global.WarningText")
+    else
+      setAlert(w, "Prêt.", "Global.SuccessText")
+    end
+    return { song = s, err = err, busy = busy or {}, dup = d }
+  end
+
+  -- Supprimer
+  setRecap(w, deleteLines(s))
+  setAlert(w, "Toute la song sera supprimée. Un Oops la remet.", "Global.WarningText")
+  return { song = s, busy = {} }
+end
 
 local function runSetupWindow(w)
   ui.action, ui.dirty = nil, true
-  local armed, finished, lastSig, tick = false, false, nil, 0
+  local armed, lastSig, tick = false, nil, 0
   local appAsked = false   -- la liste des apparences ne s'ouvre qu'une fois
+  w.restore = applyView
+  applyView(w)
+  setGo(w, "normal")
 
-  local function setCreateText(text)
-    w.createBtn.Text = text
-  end
-
-  local function refresh()
+  local function refreshCreate()
     local input = readFields(w)
     local err, busy = validate(input)
     w.maName.Text = (input.name ~= "") and ("Nom dans MA : " .. input.name) or ""
@@ -1419,6 +2462,12 @@ local function runSetupWindow(w)
         t[#t + 1] = "Déjà occupé, sera écrasé : " .. table.concat(busy, ", ") .. "."
         color = "Global.WarningText"
       end
+      -- les songs se retrouvent par leur nom : un nom en double les mélangerait
+      local users = nameUsers(input.name)
+      if #users > 0 then
+        t[#t + 1] = "Nom déjà porté par : " .. table.concat(users, ", ") .. "."
+        color = "Global.WarningText"
+      end
       local miss = missingAppearances(input)
       if #miss > 0 then
         local names = {}
@@ -1429,18 +2478,47 @@ local function runSetupWindow(w)
       end
       setAlert(w, (#t > 0) and table.concat(t, "\n") or "Prêt.", color)
     end
-    return input, err, busy
+    return { input = input, err = err, busy = busy or {} }
+  end
+
+  local function refresh()
+    if w.mode == "create" then return refreshCreate() end
+    return refreshSongMode(w)
+  end
+
+  -- Résultat d'une opération : avertissements ou résumé dans le récap
+  local function showResult(ok, warnings, summary, okText)
+    if not ok then
+      setAlert(w, "Erreur : " .. tostring(warnings), "Global.ErrorText")
+    elseif #warnings > 0 then
+      setAlert(w, okText .. ", avec avertissements (ci-dessus).", "Global.WarningText")
+      setRecap(w, "- " .. table.concat(warnings, "\n- "))
+    else
+      setAlert(w, okText .. ".", "Global.SuccessText")
+      if summary and #summary > 0 then setRecap(w, table.concat(summary, "\n")) end
+    end
+  end
+
+  -- Après une opération : le résultat reste affiché, le bouton devient Fermer.
+  -- Toucher à un champ, au mode ou à la song remet la fenêtre en saisie.
+  local function hold()
+    armed = false
+    ui.action = nil   -- un clic fait pendant l'opération ne la relance pas
+    w.countKey = nil
+    setGo(w, "done")
+    lastSig = signature(w)
   end
 
   while IsObjectValid(w.base) do
     -- rafraîchit le récap quand un champ change
     tick = tick + 1
-    if not finished and (ui.dirty or tick % 4 == 0) then
+    if ui.dirty or tick % 4 == 0 then
       local sig = signature(w)
       if ui.dirty or sig ~= lastSig then
         lastSig, ui.dirty = sig, false
+        armed = false
+        setGo(w, "normal")
         refresh()
-        if armed then armed = false; setCreateText("Créer la song") end
       end
     end
 
@@ -1448,19 +2526,36 @@ local function runSetupWindow(w)
     ui.action = nil
     if a == "cancel" then
       break
-    elseif a == "tc_toggle" and not finished then
+    elseif a and a:find("^mode_") then
+      local m = a:sub(6)
+      if MODES[m] and m ~= w.mode then
+        w.mode = m
+        enterMode(w, false)
+        applyView(w)
+        ui.dirty = true
+      end
+    elseif a == "tc_toggle" and w.mode == "create" then
       w.tcOn = not w.tcOn
       setTcButton(w)
       ui.dirty = true
-    elseif a == "defaults" and not finished then
-      local d = defaultValues()
-      for _, k in ipairs(FIELD_ORDER) do
-        if k ~= "name" then w.fields[k].Content = tostring(d[k]) end
+    elseif a == "defaults" then
+      if w.mode == "create" then
+        local d = defaultValues()
+        for _, k in ipairs(FIELD_ORDER) do
+          if k ~= "name" then w.fields[k].Content = tostring(d[k]) end
+        end
+        w.tcOn = true
+        setTcButton(w)
+      elseif w.song and w.mode == "rename" then
+        w.sp.name.Content = w.song.name
+        w.autoName = w.song.name
+      elseif w.song and w.mode == "dup" then
+        w.sp.name.Content = w.song.name .. "_copie"
+        w.autoName = w.sp.name.Content
+        setDupDefaults(w, w.song)
       end
-      w.tcOn = true
-      setTcButton(w)
       ui.dirty = true
-    elseif a and PICK_FIELDS[a] and not finished then
+    elseif a and PICK_FIELDS[a] and w.mode == "create" then
       local p = PICK_FIELDS[a]
       local input = readFields(w)
       local block = (p.field == "seq") and (1 + (input.extras or 0)) or 1
@@ -1472,13 +2567,37 @@ local function runSetupWindow(w)
         w.fields[p.field].Content = tostring(n)
         ui.dirty = true
       end
-    elseif a == "create" then
-      local input, err, busy = refresh()
+    elseif a and DUP_PICK[a] and w.mode == "dup" and w.song then
+      local p, s = DUP_PICK[a], w.song
+      if not ((p.field == "tcNo" and not s.tc) or (p.field == "macro" and not s.macro)) then
+        local block = (p.field == "seq") and (1 + s.extras) or 1
+        local n = pickInSetup(w, p, toInt(w.dup.fields[p.field].Content), block, w.dup.pickBtn[p.field])
+        ui.action = nil
+        if n and IsObjectValid(w.base) then
+          w.dup.fields[p.field].Content = tostring(n)
+          ui.dirty = true
+        end
+      end
+    elseif a == "pick_song" and w.mode ~= "create" then
+      local s = pickSong(w)
+      ui.action = nil
+      if s and IsObjectValid(w.base) then
+        local changed = not (w.song and w.song.page == s.page and w.song.name == s.name)
+        w.song, w.lost = s, nil
+        enterMode(w, changed)
+        applyView(w)
+      end
+      ui.dirty = true
+
+    elseif a == "go" and w.mode == "create" then
+      local r = refresh()
+      local input, err, busy = r.input, r.err, r.busy
       if not err and not appAsked and #missingAppearances(input) > 0 then
         appAsked = true
         resolveAppearances(input, w.createBtn)
         if not IsObjectValid(w.base) then break end
-        input, err, busy = refresh()
+        r = refresh()
+        input, err, busy = r.input, r.err, r.busy
       end
       if err then
         setAlert(w, err, "Global.ErrorText")
@@ -1486,7 +2605,7 @@ local function runSetupWindow(w)
         armed = true
         setAlert(w, "Déjà occupé : " .. table.concat(busy, ", ") .. ".\nAppuie encore pour écraser.",
                  "Global.WarningText")
-        setCreateText("Écraser et créer")
+        setGo(w, "armed")
       else
         local ok, res = pcall(create, input)
         if not ok then
@@ -1498,9 +2617,52 @@ local function runSetupWindow(w)
         else
           setAlert(w, 'Song « ' .. input.name .. ' » créée.', "Global.SuccessText")
         end
-        finished = true
-        setCreateText("Fermer")
-        w.createBtn.SignalValue = "cancel"
+        hold()
+      end
+
+    elseif a == "go" and w.mode == "rename" then
+      local r = refresh()
+      if r.song and not r.err then
+        local old = r.song.name
+        local ok, warnings, summary = pcall(renameSong, r.song, r.name)
+        showResult(ok, warnings, summary, "Song « " .. old .. " » renommée en « " .. r.name .. " »")
+        if ok then
+          w.song = resolveSong({ page = r.song.page, name = r.name })
+          w.autoName = r.name
+        end
+        showSongRow(w)
+        hold()
+      end
+
+    elseif a == "go" and w.mode == "dup" then
+      local r = refresh()
+      if r.song and not r.err then
+        if #r.busy > 0 and not armed then
+          armed = true
+          setAlert(w, "Déjà occupé : " .. table.concat(r.busy, ", ") .. ".\nAppuie encore pour écraser.",
+                   "Global.WarningText")
+          setGo(w, "armed")
+        else
+          local ok, warnings, summary = pcall(duplicateSong, r.song, r.dup)
+          showResult(ok, warnings, summary,
+                     "Song « " .. r.song.name .. " » dupliquée en « " .. r.dup.name .. " »")
+          hold()
+        end
+      end
+
+    elseif a == "go" and w.mode == "delete" then
+      local r = refresh()
+      if r.song and not armed then
+        armed = true
+        setAlert(w, "Appuie encore pour supprimer « " .. r.song.name .. " » (liste ci-dessus).",
+                 "Global.ErrorText")
+        setGo(w, "armed")
+      elseif r.song then
+        local ok, warnings, summary = pcall(deleteSong, r.song)
+        showResult(ok, warnings, summary, "Song « " .. r.song.name .. " » supprimée")
+        if ok then w.song, w.lost = nil, nil end
+        showSongRow(w)
+        hold()
       end
     end
     coroutine.yield(0.05)

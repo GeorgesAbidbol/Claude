@@ -18,6 +18,8 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | Fenêtre | une seule fenêtre : déplaçable par la barre de titre, redimensionnable, croix pour fermer |
 | Choix dans les pools | Page, Macro, Séquence, Timecode : taper le numéro **ou** ouvrir la fenêtre de sélection **native** de MA (style « Select Selection »), pas une fenêtre dessinée à part |
 | Inspiration visuelle | SongMAnager de MATools (ma.tools) |
+| Modes (12/10) | Renommer, Dupliquer, Supprimer : une song = page + séquence du même nom ; extras = séquences suivantes avec ce nom en note ; timecode et macro du même nom |
+| Dupliquer le timecode (12/10) | « Oui, tout copier » : copier le timecode entier puis « changer les liens des events trigés » vers la copie |
 
 ## Versions
 
@@ -43,6 +45,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.6.3 | test onPC de la 0.6.2 : la liste défile et ne plante pas. Jo : « libre c'est noir, pas libre c'est gris » dans les quatre listes ; cases libres en fond transparent (noir de la liste), occupées en gris ou couleur d'apparence ; numéros libres trop courts pour séquence + extras marqués « pas la place » (Jo ne comprenait pas pourquoi ils étaient grisés). Légende en bas de la liste. « Ce qui sera créé » : une case par ligne (9 cases étirées) au lieu d'un seul bloc de texte |
 | 0.6.4 | test onPC de la 0.6.3 : couleurs et récap OK, mais cliquer une case de la liste ferme tout le plugin. Cause : `closeWindow` supprimait la liste (`Obj.Delete`), MA la supprime un peu plus tard, la fenêtre était donc encore « valide » et le secours `ScreenOverlay:ClearUIChildren()` effaçait aussi la fenêtre principale. Correction : index vérifié avec `GetUIChild`, attente de la suppression (yield), jamais d'effacement de l'écran tant que la fenêtre principale vit (au pire la liste est masquée). Ajout du test banane (`FindTexture`, System Monitor seulement) |
 | 0.6.5 | test onPC de la 0.6.4 : `LUA API_ObjectDelete: deletion of the child object is prohibited` au clic, la liste masquée au lieu d'être fermée, et un clic sur une case grisée passait au bouton Annuler de la fenêtre dessous (le plugin se fermait ensuite). Jo : « vire moi la banane » (test retiré), « fais en sorte que tous les pools marchent de la même façon ». Liste refaite **dans la fenêtre principale** : calque `DialogFrame` dans la même case que le setup, on passe de l'un à l'autre avec `Visible` / `Enabled` (recette UI Compact Layout de BakaCowpoke, CC0), cases vidées par `ScrollBox:ClearUIChildren()` et refaites à chaque choix, bouton Annuler. Toutes les cases cliquables ; « pas la place » affiche un avertissement orange. Clic en attente ignoré après la liste |
+| 0.7.0 | Jo (12/10) : « tout marche », on passe à Renommer / Dupliquer / Supprimer. Boutons de mode actifs ; panneau Song (ligne Song ▾ qui ouvre la liste des songs dans le même calque que les pools, nouveau nom, emplacements de la copie) à la place du panneau Créer ; récap et bouton principal selon le mode ; après une opération le bouton devient Fermer et toute modification remet en saisie. Renommer : `Label` page / séquence / timecode / macro, `Note` des séquences vérifiée en Lua, `"Ancien"` → `"Nouveau"` dans les commandes des cues et les lignes de macro, `currentSong` suivie. Dupliquer : `Copy` des séquences, de la page (216 / 121... réassignés, autres executors qui visaient la song rebranchés), de la macro (nom remplacé) et du timecode entier, puis chaque lien du timecode copié vers la song d'origine rebranché sur la copie (reconnu par identité d'objet, sinon par adresse ; écrit par handle, adresse ou adresse MA, vérifié par relecture ; échecs comptés et structure écrite dans le System Monitor). Supprimer : deux appuis, un seul Oops. Créer : commandes identiques à la 0.6.5 (vérifié sur simulation) ; avertissement si le nom est déjà porté par une page, séquence, timecode ou macro |
 
 ## Leçons apprises
 
@@ -159,15 +162,13 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 - v0.6.5 validée par Jo sur onPC (12/10) : « tout marche ». Couleurs d'apparence encore à voir sur des
   objets qui en ont.
-- **Modes Renommer / Dupliquer / Supprimer (proposition du 12/10, en attente de l'accord de Jo)** :
-  - trouver une song : page + séquence du même nom (marche aussi pour les songs de la macro d'origine) ;
-    extras = séquences qui suivent la main avec ce nom en note ; timecode et macro du même nom ;
-    première ligne « Song ▾ » qui ouvre la liste des songs du show (même calque que les pools) ;
-  - Renommer : page, séquence main, notes des extras, timecode, macro, commandes des cues 0.6 / 0.7 /
-    Off TC, lignes 1 et 2 de la macro ;
-  - Dupliquer : nouveau nom, emplacements libres modifiables, copie des séquences et cues, page,
-    executors et macro refaits, timecode copié (question à Jo : events rebranchés ou timecode vide) ;
-  - Supprimer : récap en rouge, deux appuis, un seul Oops.
+- **v0.7.0 à tester sur console** : les trois modes. Points incertains sans console : nom de la
+  propriété des liens du timecode et façon de les écrire (le plugin essaie handle, adresse, adresse MA
+  et écrit ce qui a marché), `Copy Page` (executors gardés en référence aux séquences d'origine,
+  supposé), `Assign` sur un executor déjà occupé (supposé sans confirmation), propriété `Note` des
+  séquences. Oops ne remet pas les commandes de cues / lignes de macro modifiées en Lua par Renommer.
+- Couleurs d'apparence de la liste : vérifier qu'elles sont bien retirées du thème à la fermeture
+  (BakaCowpoke note que `Delete()` en Lua ne retirait pas ses couleurs du thème).
 - Pistes si la v0.6.2 marche : ouvrir la liste sur le numéro actuel (`ScrollDo`), filtre par nom.
 - Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
