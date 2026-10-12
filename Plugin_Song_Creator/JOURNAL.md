@@ -157,8 +157,17 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 ## Reste à faire
 
-- Tester la v0.6.5 sur les quatre pools : clic libre, clic occupé, Annuler, « pas la place » (séquence) ;
-  couleurs d'apparence sur des objets qui en ont.
+- v0.6.5 validée par Jo sur onPC (12/10) : « tout marche ». Couleurs d'apparence encore à voir sur des
+  objets qui en ont.
+- **Modes Renommer / Dupliquer / Supprimer (proposition du 12/10, en attente de l'accord de Jo)** :
+  - trouver une song : page + séquence du même nom (marche aussi pour les songs de la macro d'origine) ;
+    extras = séquences qui suivent la main avec ce nom en note ; timecode et macro du même nom ;
+    première ligne « Song ▾ » qui ouvre la liste des songs du show (même calque que les pools) ;
+  - Renommer : page, séquence main, notes des extras, timecode, macro, commandes des cues 0.6 / 0.7 /
+    Off TC, lignes 1 et 2 de la macro ;
+  - Dupliquer : nouveau nom, emplacements libres modifiables, copie des séquences et cues, page,
+    executors et macro refaits, timecode copié (question à Jo : events rebranchés ou timecode vide) ;
+  - Supprimer : récap en rouge, deux appuis, un seul Oops.
 - Pistes si la v0.6.2 marche : ouvrir la liste sur le numéro actuel (`ScrollDo`), filtre par nom.
 - Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
