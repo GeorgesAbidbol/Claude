@@ -41,6 +41,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.6.1 | test console de la 0.6.0 : affichage cassé, liste « Select ... » qui fait planter MA dès l'ouverture, logo banane absent. Jo : « laisse tomber » la banane, retour à la fenêtre d'avant (il a choisi la v0.5.0). Donc fenêtre v0.5.0 et liste native `PopupInput` (sans apparences) ; seul ajout gardé : titre des listes « Page », « Sequence »... pour que MA affiche « Select Sequence » |
 | 0.6.2 | test console de la 0.6.1 : la liste native `PopupInput` ne défile pas et ne propose que les objets et 12 numéros libres, impossible d'aller plus loin (séquences, macros, timecodes). Nouvelle liste « Select ... » : `BaseInput` + `DialogFrame` + `ScrollBox` + `ScrollBarV` (recette de Tags UI Helper de BakaCowpoke, CC0), une case `Button` par numéro (tous les numéros du pool, 30 après le dernier objet, au plus 1000 cases sauf objets), libres trop courts pour séquence + extras grisés, couleur de l'apparence posée après l'affichage via des couleurs ajoutées au thème (Global.SongCreator_rrggbbaa, retirées à la fin). `PopupInput` gardé en secours |
 | 0.6.3 | test onPC de la 0.6.2 : la liste défile et ne plante pas. Jo : « libre c'est noir, pas libre c'est gris » dans les quatre listes ; cases libres en fond transparent (noir de la liste), occupées en gris ou couleur d'apparence ; numéros libres trop courts pour séquence + extras marqués « pas la place » (Jo ne comprenait pas pourquoi ils étaient grisés). Légende en bas de la liste. « Ce qui sera créé » : une case par ligne (9 cases étirées) au lieu d'un seul bloc de texte |
+| 0.6.4 | test onPC de la 0.6.3 : couleurs et récap OK, mais cliquer une case de la liste ferme tout le plugin. Cause : `closeWindow` supprimait la liste (`Obj.Delete`), MA la supprime un peu plus tard, la fenêtre était donc encore « valide » et le secours `ScreenOverlay:ClearUIChildren()` effaçait aussi la fenêtre principale. Correction : index vérifié avec `GetUIChild`, attente de la suppression (yield), jamais d'effacement de l'écran tant que la fenêtre principale vit (au pire la liste est masquée). Ajout du test banane (`FindTexture`, System Monitor seulement) |
 
 ## Leçons apprises
 
@@ -116,6 +117,9 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 - **Test onPC de la v0.6.2 (12/10)** : la recette `ScrollBox` + `ScrollBarV` marche (liste de 86 cases,
   défilement, pas de plantage), le bouton désactivé (`Enabled = "No"`) s'affiche presque noir. Couleurs
   d'apparence pas encore vues (séquences du show de test sans apparence ?).
+- **Fermer une fenêtre parmi plusieurs (0.6.3 -> 0.6.4)** : `Obj.Delete(overlay, index)` ne supprime pas
+  tout de suite, `IsObjectValid` reste vrai juste après. Ne jamais enchaîner sur `ClearUIChildren()` de
+  l'écran : ça efface aussi les autres fenêtres du plugin. Attendre (yield) que la fenêtre disparaisse.
 - **Baguette de MULE creator (Andreas Glad, montré par Jo le 12/10)** : c'est l'icône intégrée de MA
   `wizard`, passée à `MessageBox` (`icon = 'wizard'`), pas une image du show. Les icônes de barre de titre
   viennent de la liste de textures de MA (`FindTexture(nom)` existe). Une image du show (la banane) n'y est
@@ -144,10 +148,10 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 ## Reste à faire
 
-- Tester la v0.6.3 : cases noires / grises, récap en cases, couleurs d'apparence sur des objets qui en ont
-  (System Monitor : « cases en couleur d'apparence »).
-- Banane en icône : dans la prochaine version, demander à MA (`FindTexture`) s'il connaît l'image
-  banane comme texture et l'écrire dans le System Monitor ; si oui, la mettre à la place de l'icône plugin.
+- Tester la v0.6.4 : un clic sur une case remplit le champ et la fenêtre principale reste ouverte ;
+  couleurs d'apparence sur des objets qui en ont ; lire les lignes « test banane » du System Monitor.
+- Banane en icône : la v0.6.4 écrit le résultat de `FindTexture` dans le System Monitor ; si « TROUVEE »,
+  mettre ce nom en `Icon` du TitleButton à la place de l'icône plugin.
 - Pistes si la v0.6.2 marche : ouvrir la liste sur le numéro actuel (`ScrollDo`), filtre par nom.
 - Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.

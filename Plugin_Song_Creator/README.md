@@ -1,4 +1,4 @@
-# Plugin Song Creator v0.6.3 (grandMA3 2.3.2.0)
+# Plugin Song Creator v0.6.4 (grandMA3 2.3.2.0)
 
 Plugin grandMA3 qui remplace la macro « FULL SONG CREATOR » : une fenêtre de setup,
 puis la création complète d'une song (page, séquences, cues, timecode, executors,
@@ -90,6 +90,8 @@ raccourcis. Coupe-les avec F10 (ou ShCuts) le temps de remplir le setup.
   plantait. La liste s'affiche d'abord sans couleurs, puis les couleurs d'apparence sont posées :
   si MA plante juste après l'apparition de la liste, ce sont les couleurs. Le System Monitor note
   « liste Sequences affichee » puis « cases en couleur d'apparence ».
+- Au démarrage, le System Monitor affiche des lignes « test banane » : le plugin demande seulement à MA
+  s'il connaît l'image banane comme icône. Rien n'est affiché à l'écran.
 - Les couleurs d'apparence passent par des couleurs ajoutées au thème MA (Global.SongCreator_...),
   retirées à la fin du plugin.
 - Si la liste ne peut pas se construire, le plugin ouvre la liste native de MA (sans défilement ni

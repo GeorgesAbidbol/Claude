@@ -10,7 +10,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.6.3"
+local VERSION = "0.6.4"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -192,10 +192,43 @@ local function cell(col, row, col2, row2)
   return { left = col, right = col2 or col, top = row, bottom = row2 or row }
 end
 
-local function closeWindow(overlay, base)
+-- Position (à partir de 1) d'une fenêtre parmi les fenêtres de l'écran :
+-- on vérifie que c'est bien elle avant de supprimer quoi que ce soit.
+local function overlayIndex(overlay, base)
+  local idx
+  pcall(function()
+    local i = Obj.Index(base)
+    if overlay:GetUIChild(i) == base then idx = i end
+  end)
+  if idx then return idx end
+  pcall(function()
+    for i = 1, overlay:GetUIChildrenCount() do
+      if overlay:GetUIChild(i) == base then idx = i; break end
+    end
+  end)
+  if idx then return idx end
+  -- version de MA sans GetUIChild : l'index donné par MA (recette de GUI REPLACE V15)
+  pcall(function() idx = Obj.Index(base) end)
+  return idx
+end
+
+-- Ferme une fenêtre. MA supprime la fenêtre un peu plus tard : on attend
+-- qu'elle ait disparu au lieu de tout effacer (en 0.6.3, choisir une case
+-- de la liste effaçait aussi la fenêtre principale et fermait le plugin).
+-- others = true : d'autres fenêtres du plugin restent ouvertes, on ne vide
+-- jamais l'écran ; au pire la fenêtre est masquée.
+local function closeWindow(overlay, base, others)
   if not IsObjectValid(base) then return end
-  local ok = pcall(function() Obj.Delete(overlay, Obj.Index(base)) end)
-  if not ok or IsObjectValid(base) then
+  local idx = overlayIndex(overlay, base)
+  if idx then pcall(function() Obj.Delete(overlay, idx) end) end
+  for _ = 1, 20 do
+    if not IsObjectValid(base) then return end
+    coroutine.yield(0.05)
+  end
+  Printf("[SongCreator] fenetre non supprimee par MA (index " .. tostring(idx) .. ")")
+  if others then
+    pcall(function() base.Visible = "No" end)
+  else
     pcall(function() overlay:ClearUIChildren() end)
   end
 end
@@ -996,7 +1029,7 @@ local function pickWithScroll(poolName, current, block)
                                    Padding = pad(14, 8, 0, 0) })
   end)
   if not okBuild then
-    if base then closeWindow(overlay, base) end
+    if base then closeWindow(overlay, base, true) end
     return false, errBuild
   end
   Printf("[SongCreator] liste " .. poolName .. " affichee : " .. #nos .. " cases, " .. nObj .. " objets")
@@ -1032,7 +1065,7 @@ local function pickWithScroll(poolName, current, block)
       break
     end
   end
-  closeWindow(overlay, base)
+  closeWindow(overlay, base, true)
   return true, chosen
 end
 
@@ -1486,11 +1519,42 @@ local function RealMain(displayHandle, argument)
   messageBoxFlow(v)
 end
 
+-- Test banane (rien n'est affiché) : MA connaît-il l'image banane du show
+-- comme icône ? La baguette de MULE creator est l'icône intégrée « wizard » ;
+-- une image du show n'est utilisable en icône que si FindTexture la trouve.
+local function probeBanana()
+  local found = {}
+  pcall(function()
+    for _, img in ipairs(ShowData().MediaPools.Images:Children()) do
+      local nm = tostring(img.name or "")
+      if nm:lower():find("banan") then
+        local file = ""
+        pcall(function() file = tostring(img.FileName or "") end)
+        found[#found + 1] = { nm, file }
+      end
+    end
+  end)
+  if #found == 0 then
+    Printf("[SongCreator] test banane : aucune image 'banane' dans le pool Images")
+    return
+  end
+  for _, f in ipairs(found) do
+    for _, key in ipairs({ f[1], f[2], (f[2]:gsub("%.%w+$", "")) }) do
+      if key ~= "" then
+        local ok, tex = pcall(FindTexture, key)
+        Printf("[SongCreator] test banane : FindTexture('" .. key .. "') -> "
+               .. ((ok and tex) and "TROUVEE" or "absente"))
+      end
+    end
+  end
+end
+
 -- Point d'entrée protégé : toute erreur est écrite dans le System Monitor
 -- et affichée, au lieu d'un plugin qui « ne fait rien ».
 local function Main(displayHandle, argument)
   local okV, ver = pcall(Version)
   Printf("[SongCreator] demarrage v" .. VERSION .. " sur grandMA3 " .. (okV and tostring(ver) or "?"))
+  pcall(probeBanana)
   local ok, err = xpcall(RealMain, debug.traceback, displayHandle, argument)
   -- couleurs de liste ajoutées au thème : retirées une fois les fenêtres fermées
   if next(madeColors) then pcall(removeThemeColors) end
