@@ -1,4 +1,4 @@
-# Plugin Song Creator v0.6.4 (grandMA3 2.3.2.0)
+# Plugin Song Creator v0.6.5 (grandMA3 2.3.2.0)
 
 Plugin grandMA3 qui remplace la macro « FULL SONG CREATOR » : une fenêtre de setup,
 puis la création complète d'une song (page, séquences, cues, timecode, executors,
@@ -31,13 +31,14 @@ plugin GUI REPLACE V15 de Jo : cadre de dialogue MA, marges entre les cases, lib
   - **Song** : le nom, avec en dessous le nom tel qu'il sera écrit dans MA (`Nuit_Blanche`) ;
   - **Emplacements** : une ligne par objet (Page, Séquence main, Macro de rappel, Timecode) avec
     le numéro, puis son état (« libre », ou « occupé : « Intro » » en orange), puis la flèche ▾.
-    L'état ou la flèche ouvrent la liste « Select Page », « Select Sequence »... : tous les
-    numéros du pool comme dans la fenêtre du pool (objets existants et cases « - libre - »),
-    jusqu'à 30 numéros après le dernier objet, avec une **barre de défilement** à droite.
-    **Noir : libre. Gris : occupé** (ou la couleur de son apparence, pas l'image). On touche une
-    case pour la choisir ; la croix ou Échap ferment sans rien changer. Pour la séquence, un
-    numéro libre marqué « pas la place » ne peut pas recevoir la main et ses extras (l'objet
-    suivant est trop près) : il n'est pas sélectionnable. L'état couvre tout le bloc ;
+    L'état ou la flèche affichent, **dans la fenêtre**, la liste « Select Page »,
+    « Select Sequence »... : tous les numéros du pool comme dans la fenêtre du pool, jusqu'à
+    30 numéros après le dernier objet, avec une **barre de défilement** à droite.
+    **Noir : libre. Gris : occupé** (ou la couleur de son apparence, pas l'image). Les quatre
+    pools marchent pareil : un clic sur une case libre ou occupée la met dans le champ et le
+    setup revient ; « Annuler » en bas à droite revient sans rien changer. Pour la séquence, une
+    case « pas la place » (la main et ses extras ne tiennent pas avant l'objet suivant) affiche
+    un avertissement orange en haut de la liste, qui reste ouverte. L'état couvre tout le bloc ;
   - **Réglages** : BPM, Extras (0 à 10), Cues de song, Créer le timecode (Oui / Non) ;
   - rappel des réglages fixes : Exec main 216, extras 121 à 130, pages communes, Speed Master 3.1.
 - **À droite, « Ce qui sera créé »** : le récap en direct, une case par ligne, puis l'alerte en couleur (rouge :
@@ -84,14 +85,12 @@ Sur onPC, si les raccourcis clavier sont actifs, les touches tapées dans la fen
 raccourcis. Coupe-les avec F10 (ou ShCuts) le temps de remplir le setup.
 
 ## À vérifier sur console
-- La liste des pools v0.6.2 a marché sur onPC (défilement, pas de plantage). Les couleurs d'apparence
-  restent à voir sur des objets qui ont une apparence. La liste reprend
-  la recette de défilement d'un plugin publié (ScrollBox + ScrollBarV), pas la liste de la v0.6.0 qui
-  plantait. La liste s'affiche d'abord sans couleurs, puis les couleurs d'apparence sont posées :
-  si MA plante juste après l'apparition de la liste, ce sont les couleurs. Le System Monitor note
-  « liste Sequences affichee » puis « cases en couleur d'apparence ».
-- Au démarrage, le System Monitor affiche des lignes « test banane » : le plugin demande seulement à MA
-  s'il connaît l'image banane comme icône. Rien n'est affiché à l'écran.
+- v0.6.5 : la liste est maintenant dans la fenêtre principale (plus de seconde fenêtre que MA refusait
+  de supprimer). À vérifier sur les quatre pools : clic libre, clic occupé, Annuler, « pas la place ».
+- La liste (ScrollBox + ScrollBarV, recette d'un plugin publié) a défilé sans plantage sur onPC en 0.6.2
+  à 0.6.4. Les couleurs d'apparence restent à voir sur des objets qui ont une apparence ; elles sont
+  posées après l'affichage de la liste. Le System Monitor note « liste Sequences affichee » puis
+  « cases en couleur d'apparence ».
 - Les couleurs d'apparence passent par des couleurs ajoutées au thème MA (Global.SongCreator_...),
   retirées à la fin du plugin.
 - Si la liste ne peut pas se construire, le plugin ouvre la liste native de MA (sans défilement ni
