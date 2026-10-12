@@ -37,6 +37,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.4.0 | nouvelle fenêtre d'après la maquette v0.4 (modèle « Search and Modify ») : modes à gauche (Créer ; Renommer, Dupliquer, Supprimer grisés), emplacements avec flèche ▾ vers la sélection native, réglages, bouton Oui / Non pour le timecode, récap « Ce qui sera créé » et alertes en couleur à droite, cases occupées en orange (avec le nom de l'objet), boutons Créer / Valeurs par défaut / Annuler ; lignes de hauteur fixe et polices plus grandes |
 | 0.4.1 | retours console de la 0.4.0 : fenêtre de départ agrandie (1400 x 600), cases des emplacements plus larges (les numéros étaient masqués), icônes des boutons placées à gauche du texte ou retirées si MA ne sait pas les décaler, plus d'icône sur le bouton Oui / Non, lignes du récap raccourcies |
 | 0.5.0 | fenêtre refaite avec les recettes de GUI REPLACE V15 de Jo (validé sur console) : `DialogFrame` pour le cadre et le fond, marges autour de chaque case, libellés sans fond à gauche des champs, titres de section, une ligne par emplacement avec son état (libre / occupé : « nom ») qui ouvre la liste, bouton Créer dans la couleur « Please » de MA, version à droite de la barre de titre, fenêtre 1300 x 760 (au plus 95 % de l'écran) |
+| 0.6.0 | test console de la 0.5.0 : « pas mal et fonctionnel ». Listes de pools refaites : fenêtre « Select ... » (`Popup` + `ScrollableItemList` en `PopupItemButtonExt`) avec l'apparence de chaque objet, barre de défilement (`ScrollBarV`) et filtre ; tous les objets du pool (400 séquences et plus), plus des numéros libres triés au milieu ; liste simple `PopupInput` en secours. Titre de la liste simple corrigé (« Select Select Sequence »). Logo banane de Jo dans la barre de titre (`AppearancePreview`) si le show a une apparence dont le nom contient « banane » |
 
 ## Leçons apprises
 
@@ -89,6 +90,20 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
   à gauche dans une colonne fixe ; `BackColor = Root().ColorTheme.ColorGroups.Global.Transparent` pour les
   textes, `Button.Background` pour les listes, `Button.BackgroundPlease` pour les boutons principaux ;
   taille au plus 95 % de l'écran ; version dans la barre de titre ; boutons de choix qui affichent la valeur.
+- **Test console de la v0.5.0 (12/10)** : Jo trouve la fenêtre « pas mal et fonctionnelle ». Demandes : barre de
+  défilement dans les listes (souvent plus de 400 séquences dans un show) et objets affichés avec leur apparence,
+  pour les 4 pools. `PopupInput` ajoute « Select » devant le titre (« Select Select Sequence »).
+- **Listes avec apparences et défilement** (forum MA, sujets 68072, 69842, 68394, 8942) :
+  `PopupInput` `render_options.left_icon` ne montre que les icônes générées des presets, pas les apparences.
+  Il faut une fenêtre `Popup` avec une `ScrollableItemList` (`ItemType = "PopupItemButtonExt"`,
+  `ShowLeftIcon = "Yes"`), remplie par `list:AddListObjectItem(objet, texte, { appearance = true })` et
+  `AddListStringItem(texte, valeur)` ; choix par `list.OnSelectedItem = "NomDuSignal"` (avec `PluginComponent`),
+  puis `list:GetListSelectedItemIndex()` ; filtre = `LineEdit` avec `Property = "ItemFilter"`, `Target = list` ;
+  défilement = `ScrollBarV` dans sa propre colonne (`SizePolicy = "Content"`), `ScrollTarget = list` (le handle).
+- **Logo / image dans une fenêtre** (forum MA, sujet 69637, réponse d'Andreas de MA) : pas d'icône perso dans
+  `Icon` ; utiliser un `AppearancePreview` avec `Appearance = GetObject('Image 3.1')` (ou une apparence),
+  `BackColor = 'Global.Transparent'`, `Interactive = 'No'`. Jo a fait l'apparence
+  « [[LOGO Banane Vectorisé Blanc_png]] » (image `CUSTOM/LOGO Banane Vectorisé Blanc.png`).
 
 ## Ressources
 
@@ -107,7 +122,7 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 ## Reste à faire
 
-- Tester sur console l'aspect de la v0.5.0 (cadre, marges, fonds, couleur du bouton Créer).
+- Tester sur console la v0.6.0 : liste « Select ... » (apparences, défilement, filtre, choix) et logo.
 - Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
 - Question de Jo (11/10) : le plugin apporte-t-il plus que la macro ? Piste : gérer les songs existantes

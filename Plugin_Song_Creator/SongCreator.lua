@@ -10,7 +10,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.5.0"
+local VERSION = "0.6.0"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -94,32 +94,14 @@ local function firstFree(poolName, from, count)
 end
 
 -- ---------------------------------------------------------------------------
---  Sélecteur graphique de pool (Page / Macro / Timecode)
---  Liste les objets existants (numéro + nom) et les numéros libres autour,
---  dans un menu déroulant MA (PopupInput). Renvoie le numéro choisi ou nil.
+--  Choix dans les pools Page / Séquence / Macro / Timecode (voir pickFromPool)
 -- ---------------------------------------------------------------------------
 local PICKERS = {
-  [3] = { field = "page",  pool = "Pages",     title = "Choisir la page" },
-  [4] = { field = "macro", pool = "Macros",    title = "Choisir la macro de rappel" },
-  [5] = { field = "tcNo",  pool = "Timecodes", title = "Choisir le timecode" },
-  [6] = { field = "seq",   pool = "Sequences", title = "Choisir la sequence main" },
+  [3] = { field = "page",  pool = "Pages" },
+  [4] = { field = "macro", pool = "Macros" },
+  [5] = { field = "tcNo",  pool = "Timecodes" },
+  [6] = { field = "seq",   pool = "Sequences" },
 }
-
--- Lit le pool : used[no] = nom, maxNo = plus grand numéro occupé.
-local function readPool(poolName)
-  local p = pool(poolName)
-  local used, maxNo = {}, 0
-  if p then
-    for _, obj in ipairs(p:Children()) do
-      local no = tonumber(obj.no)
-      if no then
-        used[no] = obj.name or ""
-        if no > maxNo then maxNo = no end
-      end
-    end
-  end
-  return used, maxNo
-end
 
 -- block : nombre de numéros consécutifs nécessaires (séquence main + extras)
 local function hasRoom(used, n, block)
@@ -127,15 +109,6 @@ local function hasRoom(used, n, block)
     if used[n + k] then return false end
   end
   return true
-end
-
-local function setColor(obj, prop, colorPath)
-  -- Couleurs du thème MA ; ignorées si le chemin n'existe pas dans cette version
-  pcall(function()
-    local c = Root().ColorTheme.ColorGroups
-    for part in colorPath:gmatch("[^%.]+") do c = c[part] end
-    if c then obj[prop] = c end
-  end)
 end
 
 -- Écran où afficher les fenêtres. Sur console, l'écran qui a le focus peut
@@ -199,38 +172,69 @@ local function closeWindow(overlay, base)
   end
 end
 
--- ---- Fenêtre de sélection native MA (PopupInput) ----
--- Même fenêtre que les « Select ... » de la console : colonnes, filtre clavier.
--- Elle liste les objets existants du pool (« 12 'Nom' ») puis des numéros libres.
-local FREE_SLOTS = 12
+-- ---- Choix dans un pool ----
+-- Liste des choix : tous les objets existants (avec leur apparence) et des
+-- numéros libres, triés par numéro. block : place nécessaire (main + extras).
+local FREE_SLOTS = 30   -- numéros libres proposés dans les trous du pool
+local FREE_AFTER = 5    -- numéros libres proposés après le dernier objet
 
-local function pickFromPool(poolName, title, current, block, caller)
-  local used, maxNo = readPool(poolName)
-  local items, numbers, selected = {}, {}, nil
-  local function add(n, label)
-    items[#items + 1] = label
-    numbers[#numbers + 1] = n
-    if n == current then selected = label end
-  end
-
-  local nos = {}
-  for n in pairs(used) do nos[#nos + 1] = n end
-  table.sort(nos)
-  for _, n in ipairs(nos) do add(n, string.format("%d '%s'", n, used[n])) end
-
-  local free, n = 0, 1
-  while free < FREE_SLOTS and n < 10000 do
-    if not used[n] and hasRoom(used, n, block) then
-      add(n, string.format("%d  - libre -", n))
-      free = free + 1
+local function poolChoices(poolName, block)
+  local p = pool(poolName)
+  local items, used, maxNo = {}, {}, 0
+  if p then
+    for _, obj in ipairs(p:Children()) do
+      local no = tonumber(obj.no)
+      if no then
+        local nm = ""
+        pcall(function() nm = tostring(obj.name or "") end)
+        items[#items + 1] = { no = no, obj = obj, label = string.format("%d  %s", no, nm) }
+        used[no] = true
+        if no > maxNo then maxNo = no end
+      end
     end
+  end
+  local added = {}
+  local function addFree(n)
+    if not used[n] and not added[n] and hasRoom(used, n, block) then
+      items[#items + 1] = { no = n, label = string.format("%d  - libre -", n) }
+      added[n] = true
+      return true
+    end
+  end
+  local free, n = 0, 1
+  while free < FREE_SLOTS and n <= maxNo do
+    if addFree(n) then free = free + 1 end
     n = n + 1
   end
+  local after = 0
+  n = maxNo + 1
+  while after < FREE_AFTER and n < maxNo + 1000 do
+    if addFree(n) then after = after + 1 end
+    n = n + 1
+  end
+  table.sort(items, function(x, y) return x.no < y.no end)
+  return items
+end
 
+local POOL_KIND = {   -- nom MA du pool et icône du titre
+  Pages     = { kind = "Page",     icon = "object_pages" },
+  Sequences = { kind = "Sequence", icon = "object_sequence" },
+  Macros    = { kind = "Macro",    icon = "object_macro" },
+  Timecodes = { kind = "Timecode", icon = "object_timecode" },
+}
+
+-- Liste simple de secours : PopupInput (MA ajoute « Select » devant le titre).
+local function pickWithPopupInput(poolName, current, block, caller)
+  local items = poolChoices(poolName, block)
+  local labels, selected = {}, nil
+  for i, it in ipairs(items) do
+    labels[i] = it.label
+    if it.no == current then selected = it.label end
+  end
   local args = {
-    title         = title,
+    title         = (POOL_KIND[poolName] or {}).kind or poolName,
     caller        = caller or (pickDisplay()),
-    items         = items,
+    items         = labels,
     selectedValue = selected,
     add_args      = { FilterSupport = "Yes" }, -- recherche au clavier
   }
@@ -242,13 +246,137 @@ local function pickFromPool(poolName, title, current, block, caller)
   end
   -- On se fie d'abord au texte choisi, puis à l'index (à partir de 0)
   if value then
-    for k, label in ipairs(items) do
-      if label == value then return numbers[k] end
+    for i, label in ipairs(labels) do
+      if label == value then return items[i].no end
     end
   end
   idx = tonumber(idx)
-  if idx == nil then return nil end
-  return numbers[idx + 1]
+  if idx == nil or not items[idx + 1] then return nil end
+  return items[idx + 1].no
+end
+
+-- Fenêtre « Select ... » faite avec les éléments des popups MA : liste
+-- ScrollableItemList avec l'apparence de chaque objet, barre de défilement
+-- verticale et filtre clavier (même principe que les listes de la console).
+local pick = {}
+signalTable.SC_PickItem = function(caller)
+  pick.list = caller
+  pick.fired = true
+end
+
+local function pickWithList(poolName, current, block)
+  local items = poolChoices(poolName, block)
+  local info = POOL_KIND[poolName] or { kind = poolName, icon = "object_plugin1" }
+  local display, dispW, dispH = pickDisplay()
+  local overlay = display.ScreenOverlay
+  local pop, list
+
+  local okBuild, errBuild = pcall(function()
+    pop = overlay:Append("Popup")
+    pop.Name = "SongCreatorPick"
+    pop.Columns, pop.Rows = 1, 2
+    pop[1][1].SizePolicy = "Fixed"; pop[1][1].Size = "50"
+    pop[1][2].SizePolicy = "Stretch"
+    pop.W = math.min(560, math.floor(dispW * 0.9))
+    pop.H = math.min(860, math.floor(dispH * 0.85))
+    opt(pop, { AlignmentH = "Center", AlignmentV = "Center", AutoClose = "Yes", CloseOnEscape = "Yes" })
+
+    local tb = pop:Append("TitleBar")
+    tb.Columns, tb.Rows = 2, 1
+    tb.Anchors = cell(0, 0)
+    tb[2][2].SizePolicy = "Fixed"; tb[2][2].Size = "50"
+    opt(tb, { Texture = "corner2" })
+    local tt = tb:Append("TitleButton")
+    tt.Text = "Select " .. info.kind
+    tt.Anchors = cell(0, 0)
+    opt(tt, { Texture = "corner1", Icon = info.icon })
+    local close = tb:Append("CloseButton")
+    close.Anchors = cell(1, 0)
+    opt(close, { Texture = "corner2" })
+
+    local frame = pop:Append("DialogFrame")
+    frame.Anchors = cell(0, 1)
+    frame.Columns, frame.Rows = 2, 2
+    frame[1][1].SizePolicy = "Fixed"; frame[1][1].Size = "50"
+    frame[1][2].SizePolicy = "Stretch"
+    frame[2][1].SizePolicy = "Stretch"
+    frame[2][2].SizePolicy = "Content"   -- colonne de la barre de défilement
+
+    list = frame:Append("ScrollableItemList")
+    list.Name = "SongCreatorPickList"
+    list.Anchors = cell(0, 1)
+    opt(list, { ItemType = "PopupItemButtonExt", ShowNumber = "No", ShowLeftIcon = "Yes",
+                ShowRightIcon = "No", Rounded = "No", IndicatorBarEnabled = "No" })
+    list.PluginComponent = myHandle
+    list.OnSelectedItem = "SC_PickItem"
+
+    local sb = frame:Append("ScrollBarV")
+    sb.Anchors = cell(1, 1)
+    sb.ScrollTarget = list
+    opt(sb, { W = "28" })
+
+    -- filtre : on tape un bout du nom ou du numéro, Entrée prend le premier
+    local filter = frame:Append("LineEdit")
+    filter.Anchors = cell(0, 0, 1, 0)
+    opt(filter, { Property = "ItemFilter", Target = list, Focus = "InitialFocus",
+                  Execute = ":SelectFirstItem", Prompt = "Filtre : ",
+                  Margin = { left = 4, right = 4, top = 4, bottom = 4 } })
+
+    for _, it in ipairs(items) do
+      if it.obj then
+        list:AddListObjectItem(it.obj, it.label, { appearance = true })
+      else
+        list:AddListStringItem(it.label, tostring(it.no))
+      end
+    end
+    pcall(function() list:Changed() end)
+  end)
+  if not okBuild then
+    if pop then closeWindow(overlay, pop) end
+    return false, errBuild
+  end
+
+  -- Attente du choix. Un choix envoyé à l'ouverture (premier élément
+  -- sélectionné tout seul) est ignoré.
+  pick.fired, pick.list = false, nil
+  local ticks, chosen = 0, nil
+  while IsObjectValid(pop) do
+    coroutine.yield(0.05)
+    ticks = ticks + 1
+    if pick.fired then
+      pick.fired = false
+      if ticks > 4 then
+        local okI, idx = pcall(function() return list:GetListSelectedItemIndex() end)
+        idx = okI and tonumber(idx) or nil
+        local it = idx and items[idx]
+        -- contrôle par le texte affiché (au cas où l'index ne suit pas l'ordre)
+        local okN, name = pcall(function() return list:GetListItemName(idx) end)
+        if okN and name and (not it or it.label ~= name) then
+          it = nil
+          for _, x in ipairs(items) do
+            if x.label == name then it = x; break end
+          end
+        end
+        if it then
+          chosen = it.no
+        else
+          Printf("[SongCreator] choix dans la liste non lu (index " .. tostring(idx) .. ")")
+        end
+        break
+      end
+    end
+  end
+  closeWindow(overlay, pop)
+  return true, chosen
+end
+
+-- Choix d'un numéro dans un pool : la liste avec apparences et défilement,
+-- ou la liste simple si cette version de MA refuse de la construire.
+local function pickFromPool(poolName, current, block, caller)
+  local ok, res = pickWithList(poolName, current, block)
+  if ok then return res end
+  Printf("[SongCreator] liste avec apparences indisponible (" .. tostring(res) .. "), liste simple")
+  return pickWithPopupInput(poolName, current, block, caller)
 end
 
 -- ---------------------------------------------------------------------------
@@ -852,6 +980,24 @@ local function setTcButton(w)
   quiet(w.pickBtn.tcNo, "Enabled", en)
 end
 
+-- Logo de Jo : apparence (ou image) du show dont le nom contient « banane ».
+-- Affiché avec un AppearancePreview, la méthode donnée par MA sur son forum.
+local function findLogo()
+  local function search(container)
+    local found
+    pcall(function()
+      for _, o in ipairs(container:Children()) do
+        if tostring(o.name or ""):lower():find("banane", 1, true) then found = o; break end
+      end
+    end)
+    return found
+  end
+  local logo
+  pcall(function() logo = search(ShowData().Appearances) end)
+  if not logo then pcall(function() logo = search(ShowData().MediaPools.Images) end) end
+  return logo
+end
+
 -- Construit la fenêtre ; une erreur ici fait passer à la boîte MA de secours.
 local function buildSetupWindow(v)
   loadColors()
@@ -871,20 +1017,38 @@ local function buildSetupWindow(v)
   local w = { overlay = overlay, base = base, fields = {}, status = {}, pickBtn = {}, tcOn = v.tcOn }
 
   -- Barre de titre : on la fait glisser pour déplacer la fenêtre, croix à droite
+  -- colonnes : [logo] | titre | version | croix
+  local logo = findLogo()
+  local c = logo and 1 or 0
   local tb = base:Append("TitleBar")
-  tb.Columns, tb.Rows = 3, 1
+  tb.Columns, tb.Rows = 3 + c, 1
   tb.Anchors = cell(0, 0)
-  fixCol(tb, 2, 110)
-  fixCol(tb, 3, 50)
+  if logo then fixCol(tb, 1, UI.title) end
+  fixCol(tb, 2 + c, 110)
+  fixCol(tb, 3 + c, 50)
   opt(tb, { Texture = "corner2" })
+  local logoShown = false
+  if logo then
+    logoShown = pcall(function()
+      local lp = tb:Append("AppearancePreview")
+      lp.Anchors = cell(0, 0)
+      lp.Appearance = logo
+      opt(lp, { BackColor = COL.transparent, Interactive = "No", Margin = pad(8, 0, 6, 6) })
+    end)
+    if not logoShown then
+      fixCol(tb, 1, 0)
+      Printf("[SongCreator] logo « " .. tostring(logo.name) .. " » non affichable")
+    end
+  end
   local tbt = tb:Append("TitleButton")
   tbt.Text = "Song Creator"
-  tbt.Anchors = cell(0, 0)
-  opt(tbt, { Texture = "corner1", Icon = "object_plugin1", Font = UI.fontButton })
-  label(tb, cell(1, 0), "v" .. VERSION, { TextalignmentH = "Right", Font = UI.fontSmall,
-                                          TextColor = "Global.LabelText", Padding = pad(4, 12, 0, 0) })
+  tbt.Anchors = cell(c, 0)
+  opt(tbt, { Texture = logoShown and "corner2" or "corner1", Font = UI.fontButton })
+  if not logoShown then opt(tbt, { Icon = "object_plugin1" }) end
+  label(tb, cell(1 + c, 0), "v" .. VERSION, { TextalignmentH = "Right", Font = UI.fontSmall,
+                                              TextColor = "Global.LabelText", Padding = pad(4, 12, 0, 0) })
   local close = tb:Append("CloseButton")
-  close.Anchors = cell(2, 0)
+  close.Anchors = cell(2 + c, 0)
   opt(close, { Texture = "corner2" })
 
   -- Cadre de dialogue MA : fond et contour de la fenêtre
@@ -1000,10 +1164,10 @@ local function buildSetupWindow(v)
 end
 
 local PICK_FIELDS = {
-  pick_page  = { field = "page",  pool = "Pages",     title = "Select Page" },
-  pick_macro = { field = "macro", pool = "Macros",    title = "Select Macro" },
-  pick_seq   = { field = "seq",   pool = "Sequences", title = "Select Sequence" },
-  pick_tcNo  = { field = "tcNo",  pool = "Timecodes", title = "Select Timecode" },
+  pick_page  = { field = "page",  pool = "Pages" },
+  pick_macro = { field = "macro", pool = "Macros" },
+  pick_seq   = { field = "seq",   pool = "Sequences" },
+  pick_tcNo  = { field = "tcNo",  pool = "Timecodes" },
 }
 
 local function runSetupWindow(w)
@@ -1086,7 +1250,7 @@ local function runSetupWindow(w)
       local p = PICK_FIELDS[a]
       local input = readFields(w)
       local block = (p.field == "seq") and (1 + (input.extras or 0)) or 1
-      local n = pickFromPool(p.pool, p.title, input[p.field], block, w.pickBtn[p.field])
+      local n = pickFromPool(p.pool, input[p.field], block, w.pickBtn[p.field])
       if n and IsObjectValid(w.base) then
         w.fields[p.field].Content = tostring(n)
         ui.dirty = true
@@ -1145,7 +1309,7 @@ local function messageBoxFlow(v)
     local picker = PICKERS[action]
     if picker then
       local block = (picker.field == "seq") and (1 + (v.extras or 0)) or 1
-      local n = pickFromPool(picker.pool, picker.title, v[picker.field], block)
+      local n = pickFromPool(picker.pool, v[picker.field], block)
       if n then v[picker.field] = n end
     else
       err, busy = validate(input)
