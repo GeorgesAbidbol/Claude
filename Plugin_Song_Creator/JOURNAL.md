@@ -19,6 +19,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | Choix dans les pools | Page, Macro, Séquence, Timecode : taper le numéro **ou** ouvrir la fenêtre de sélection **native** de MA (style « Select Selection »), pas une fenêtre dessinée à part |
 | Inspiration visuelle | SongMAnager de MATools (ma.tools) |
 | Modes (12/10) | Renommer, Dupliquer, Supprimer : une song = page + séquence du même nom ; extras = séquences suivantes avec ce nom en note ; timecode et macro du même nom |
+| Note et tag (12/10) | la note au nom de la song sur **tous** les objets créés (page, séquences, timecode, macro) ; **un tag par song** posé sur tous ses objets (« le tag est très puissant, pour d'autres plugins cela pourrait nous servir ») |
 | Dupliquer le timecode (12/10) | « Oui, tout copier » : copier le timecode entier puis « changer les liens des events trigés » vers la copie |
 
 ## Versions
@@ -46,6 +47,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.6.4 | test onPC de la 0.6.3 : couleurs et récap OK, mais cliquer une case de la liste ferme tout le plugin. Cause : `closeWindow` supprimait la liste (`Obj.Delete`), MA la supprime un peu plus tard, la fenêtre était donc encore « valide » et le secours `ScreenOverlay:ClearUIChildren()` effaçait aussi la fenêtre principale. Correction : index vérifié avec `GetUIChild`, attente de la suppression (yield), jamais d'effacement de l'écran tant que la fenêtre principale vit (au pire la liste est masquée). Ajout du test banane (`FindTexture`, System Monitor seulement) |
 | 0.6.5 | test onPC de la 0.6.4 : `LUA API_ObjectDelete: deletion of the child object is prohibited` au clic, la liste masquée au lieu d'être fermée, et un clic sur une case grisée passait au bouton Annuler de la fenêtre dessous (le plugin se fermait ensuite). Jo : « vire moi la banane » (test retiré), « fais en sorte que tous les pools marchent de la même façon ». Liste refaite **dans la fenêtre principale** : calque `DialogFrame` dans la même case que le setup, on passe de l'un à l'autre avec `Visible` / `Enabled` (recette UI Compact Layout de BakaCowpoke, CC0), cases vidées par `ScrollBox:ClearUIChildren()` et refaites à chaque choix, bouton Annuler. Toutes les cases cliquables ; « pas la place » affiche un avertissement orange. Clic en attente ignoré après la liste |
 | 0.7.0 | Jo (12/10) : « tout marche », on passe à Renommer / Dupliquer / Supprimer. Boutons de mode actifs ; panneau Song (ligne Song ▾ qui ouvre la liste des songs dans le même calque que les pools, nouveau nom, emplacements de la copie) à la place du panneau Créer ; récap et bouton principal selon le mode ; après une opération le bouton devient Fermer et toute modification remet en saisie. Renommer : `Label` page / séquence / timecode / macro, `Note` des séquences vérifiée en Lua, `"Ancien"` → `"Nouveau"` dans les commandes des cues et les lignes de macro, `currentSong` suivie. Dupliquer : `Copy` des séquences, de la page (216 / 121... réassignés, autres executors qui visaient la song rebranchés), de la macro (nom remplacé) et du timecode entier, puis chaque lien du timecode copié vers la song d'origine rebranché sur la copie (reconnu par identité d'objet, sinon par adresse ; écrit par handle, adresse ou adresse MA, vérifié par relecture ; échecs comptés et structure écrite dans le System Monitor). Supprimer : deux appuis, un seul Oops. Créer : commandes identiques à la 0.6.5 (vérifié sur simulation) ; avertissement si le nom est déjà porté par une page, séquence, timecode ou macro |
+| 0.7.1 | test console de la 0.7.0 (12/10) : Renommer, Dupliquer et Supprimer marchent (TC 7 : 5 liens rebranchés, 0 échec, Jo voit les pistes déclencher les nouvelles séquences). Mais Dupliquer remplit le System Monitor de lignes rouges « Could not resolve object address for TrackGroup 1 / <Sequence 541> ... », et la fermeture écrit « fenetre non supprimee (index 3, controle false), ecran vide ». Corrections : `ToAddr` seulement pour les classes qui ont une adresse (séquence, cue, part, page, executor, timecode, macro), une seule fois par objet ; liens internes au timecode ignorés ; liens reconnus par identité d'objet d'abord, par adresse seulement si l'identité ne trouve rien ; fermeture exactement comme GUI REPLACE V15 (`Obj.Delete(écran, Obj.Index(fenêtre))`, sans le contrôle `GetUIChild` qui échouait). Jo (12/10) : Renommer et Supprimer marchent ; note au nom de la song sur la page, le timecode et la macro aussi ; un tag par song sur tous ses objets. Tag : `Store Tag "Nom"` si absent de `ShowData().Tags`, puis `Assign Tag "Nom" At Page / Sequence a Thru b / Timecode / Macro` (syntaxe de Tags UI Helper, BakaCowpoke, CC0) ; Renommer : `Label Tag n "Nouveau"` ; Dupliquer : `Assign Off Tag "Origine"` sur la copie (refus seulement noté) puis le tag de la copie ; Supprimer : `Delete Tag n` |
 
 ## Leçons apprises
 
@@ -130,6 +132,11 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 - **Fermer une fenêtre parmi plusieurs (0.6.3 -> 0.6.4)** : `Obj.Delete(overlay, index)` ne supprime pas
   tout de suite, `IsObjectValid` reste vrai juste après. Ne jamais enchaîner sur `ClearUIChildren()` de
   l'écran : ça efface aussi les autres fenêtres du plugin. Attendre (yield) que la fenêtre disparaisse.
+- **ToAddr sur les objets internes d'un timecode (0.7.0)** : sur `TrackGroup`, pistes et plages, `ToAddr` écrit
+  « Could not resolve object address » en rouge (pas d'erreur Lua). Ne demander l'adresse que des objets de pool
+  (séquence, cue, page, executor...) et comparer les objets avec `HandleToInt`.
+- **Fermeture d'une fenêtre (0.7.0)** : le contrôle `overlay:GetUIChild(Obj.Index(w) + 1) == w` échoue sur console
+  (index 3, false) alors que `Obj.Delete(écran, Obj.Index(w))` seul (recette V15 de Jo) marche. Ne pas l'ajouter.
 - **Banane abandonnée pour de bon (12/10, Jo : « vire moi la banane »)** : `FindTexture` ne trouve pas les
   images du show (« absente » pour tous les noms). Ne plus la proposer.
 - **Baguette de MULE creator (Andreas Glad, montré par Jo le 12/10)** : c'est l'icône intégrée de MA
@@ -162,11 +169,13 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 - v0.6.5 validée par Jo sur onPC (12/10) : « tout marche ». Couleurs d'apparence encore à voir sur des
   objets qui en ont.
-- **v0.7.0** : Renommer validé sur console par Jo (12/10, « le rename marche »). Dupliquer et Supprimer à tester. Points incertains sans console : nom de la
-  propriété des liens du timecode et façon de les écrire (le plugin essaie handle, adresse, adresse MA
-  et écrit ce qui a marché), `Copy Page` (executors gardés en référence aux séquences d'origine,
-  supposé), `Assign` sur un executor déjà occupé (supposé sans confirmation), propriété `Note` des
-  séquences. Oops ne remet pas les commandes de cues / lignes de macro modifiées en Lua par Renommer.
+- **v0.7.0** : Renommer, Dupliquer (timecode compris, liens écrits par handle) et Supprimer validés sur
+  console par Jo (12/10). **v0.7.1** à confirmer : plus de lignes rouges, fermeture, notes et tags
+  (syntaxe des tags pas encore vue sur la console de Jo ; vérifier aussi que `Copy` emporte le tag). Oops ne remet pas les
+  commandes de cues / lignes de macro modifiées en Lua par Renommer.
+- Question de Jo (12/10) : comment le plugin reconnaît les extras ? Par la **note** (nom de la song), sur les
+  séquences qui suivent directement la main. L'ancienne macro pose aussi cette note, mais laissait choisir
+  le premier extra : un trou entre la main et les extras les cache au plugin. À reprendre si Jo a de telles songs.
 - Couleurs d'apparence de la liste : vérifier qu'elles sont bien retirées du thème à la fermeture
   (BakaCowpoke note que `Delete()` en Lua ne retirait pas ses couleurs du thème).
 - Pistes si la v0.6.2 marche : ouvrir la liste sur le numéro actuel (`ScrollDo`), filtre par nom.

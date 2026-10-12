@@ -11,7 +11,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.7.0"
+local VERSION = "0.7.1"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -195,30 +195,29 @@ local function cell(col, row, col2, row2)
   return { left = col, right = col2 or col, top = row, bottom = row2 or row }
 end
 
--- Ferme une fenêtre du plugin avec la recette de GUI REPLACE V15 :
--- Obj.Delete(écran, Obj.Index(fenêtre)). Vu sur console (0.6.3 / 0.6.4) :
---  - Obj.Index compte à partir de 0 et Obj.Delete prend ce même index,
---    alors que GetUIChild compte à partir de 1 (Delete(écran, 2) avec
---    l'index de GetUIChild a donné « deletion of the child object is prohibited ») ;
+-- Ferme une fenêtre du plugin avec la recette de GUI REPLACE V15, validée sur
+-- la console de Jo : Obj.Delete(écran, Obj.Index(fenêtre)). Vu sur console :
+--  - Obj.Index compte à partir de 0 et Obj.Delete prend ce même index
+--    (Delete avec un index de GetUIChild a donné « deletion of the child
+--    object is prohibited » en 0.6.4) ;
+--  - le contrôle par GetUIChild ajouté en 0.6.5 échouait (0.7.0 : « index 3,
+--    controle false ») et faisait vider tout l'écran 1 : il n'est plus bloquant ;
 --  - MA supprime la fenêtre un peu plus tard : on attend qu'elle ait disparu.
---    En 0.6.3, le secours ClearUIChildren effaçait aussi la fenêtre principale.
 -- others = true : d'autres fenêtres du plugin restent ouvertes, on ne vide
 -- jamais l'écran ; au pire la fenêtre est masquée.
 local function closeWindow(overlay, base, others)
   if not IsObjectValid(base) then return end
-  local idx, sure
+  local idx
   pcall(function() idx = Obj.Index(base) end)
-  -- contrôle : avec GetUIChild (à partir de 1), la fenêtre doit être en idx + 1
-  pcall(function() sure = (overlay:GetUIChild(idx + 1) == base) end)
-  if idx and sure ~= false then
+  if idx then
     pcall(function() Obj.Delete(overlay, idx) end)
     for _ = 1, 20 do
       if not IsObjectValid(base) then return end
       coroutine.yield(0.05)
     end
   end
-  Printf("[SongCreator] fenetre non supprimee (index " .. tostring(idx) .. ", controle "
-         .. tostring(sure) .. "), " .. (others and "masquee" or "ecran vide"))
+  Printf("[SongCreator] fenetre non supprimee (index " .. tostring(idx) .. "), "
+         .. (others and "masquee" or "ecran vide"))
   if others then
     pcall(function() base.Visible = "No" end)
   else
@@ -553,6 +552,73 @@ local function setChecked(obj, wanted, value)
   return okG and got ~= nil and trim(tostring(got)) == value
 end
 
+local function noteOf(o)
+  local n
+  pcall(function() n = o:Get("Note") end)
+  if n == nil then pcall(function() n = o.note end) end
+  return trim(tostring(n or ""))
+end
+
+-- Note d'un timecode ou d'une macro = nom de la song (Jo, 12/10), comme les
+-- séquences : par commande, puis vérifiée et posée par Lua si besoin.
+local function setNote(poolName, keyword, no, name, warnings, what)
+  C("Note " .. keyword .. " " .. no .. ' "' .. name .. '"')
+  local o = pool(poolName)[no]
+  if o and noteOf(o) ~= name and not setChecked(o, "Note", name) then
+    warnings[#warnings + 1] = "Note " .. what .. " " .. no .. " non posée"
+  end
+end
+
+-- Commande dont le refus n'est pas une erreur (écrite dans le System Monitor
+-- seulement), par exemple retirer un tag que l'objet n'a peut-être pas.
+local function Cq(cmd)
+  log[#log + 1] = cmd
+  local ok, res
+  if undo then ok, res = pcall(Cmd, cmd, undo) else ok, res = pcall(Cmd, cmd) end
+  Printf("[SongCreator] " .. cmd .. " -> " .. tostring(ok and res or "erreur"))
+end
+
+-- ---- Tag de la song (Jo, 12/10) : un tag au nom de la song sur la page, les
+-- séquences, le timecode et la macro, pour filtrer et pour d'autres plugins.
+-- Commandes de Tags UI Helper (BakaCowpoke, CC0) : Store Tag "Nom",
+-- Assign Tag "Nom" At Sequence 5, Assign Off Tag "Nom" At ... ; les tags sont
+-- dans ShowData().Tags (plus dans DataPool).
+local function tagNo(name)
+  local okT, tags = pcall(function() return ShowData().Tags end)
+  if not okT or not tags then return nil end
+  local okK, kids = pcall(function() return tags:Children() end)
+  for i, t in ipairs(okK and type(kids) == "table" and kids or {}) do
+    local okN, nm = pcall(function() return t.name end)
+    if okN and tostring(nm) == name then
+      local no
+      pcall(function() no = tonumber(t.no) end)
+      return no or i
+    end
+  end
+  return nil
+end
+
+-- « Page 3 », « Sequence 101 Thru 104 », « Timecode 7 », « Macro 413 »
+local function songObjects(page, seq, extras, tc, macro)
+  local t = { "Page " .. page,
+              "Sequence " .. seq .. ((extras > 0) and (" Thru " .. (seq + extras)) or "") }
+  if tc then t[#t + 1] = "Timecode " .. tc end
+  if macro then t[#t + 1] = "Macro " .. macro end
+  return t
+end
+
+local function tagSong(name, objs, warnings)
+  if not tagNo(name) then
+    local before = #cmdErrors
+    C('Store Tag "' .. name .. '"')
+    if #cmdErrors > before then
+      warnings[#warnings + 1] = 'Tag "' .. name .. '" non créé, objets non taggés'
+      return
+    end
+  end
+  for _, o in ipairs(objs) do C('Assign Tag "' .. name .. '" At ' .. o) end
+end
+
 -- Écrit la commande d'une cue via l'API Lua (pas de souci de guillemets
 -- imbriqués). Sur 2.3.2 la cue refuse « Command » (test console du 11/10) :
 -- on essaie d'abord sa part 0, puis la cue.
@@ -587,6 +653,7 @@ local function buildSongMacro(v, warnings)
 
   C("Store Macro " .. v.macro .. " /Overwrite")
   C('Label Macro ' .. v.macro .. ' "' .. v.name .. '"')
+  setNote("Macros", "Macro", v.macro, v.name, warnings, "de la macro")
 
   local macro = pool("Macros")[v.macro]
   if not macro then
@@ -636,6 +703,7 @@ local function createBody(v, warnings)
   C("Store Page " .. v.page .. " /Overwrite")
   C("Page " .. v.page)
   C('Label Page ' .. v.page .. ' "' .. v.name .. '"')
+  setNote("Pages", "Page", v.page, v.name, warnings, "de la page")
 
   -- 2. Séquences
   C("Store Sequence " .. v.seq .. " Thru " .. lastExtra .. " /Overwrite")
@@ -663,6 +731,7 @@ local function createBody(v, warnings)
   if v.tcOn then
     C("Store Timecode " .. v.tcNo .. " /Overwrite")
     C("Label Timecode " .. v.tcNo .. " " .. tcName)
+    setNote("Timecodes", "Timecode", v.tcNo, v.name, warnings, "du timecode")
     setCueCommand(v.seq, "Select Timecode", "Select Timecode " .. tcName, warnings)
     setCueCommand(v.seq, "Go Timecode",     "Go+ Timecode " .. tcName,    warnings)
     setCueCommand(v.seq, "Off Timecode",    "Off Timecode " .. tcName,    warnings)
@@ -670,6 +739,9 @@ local function createBody(v, warnings)
 
   -- 6. Macro de rappel
   buildSongMacro(v, warnings)
+
+  -- 7. Tag de la song sur tous ses objets
+  tagSong(v.name, songObjects(v.page, v.seq, v.extras, v.tcOn and v.tcNo or nil, v.macro), warnings)
 
 end
 
@@ -705,13 +777,6 @@ end
 --  le plugin et la macro d'origine). Extras = séquences qui suivent la main
 --  avec ce nom en note. Timecode et macro de rappel = ceux du même nom.
 -- ---------------------------------------------------------------------------
-local function noteOf(o)
-  local n
-  pcall(function() n = o:Get("Note") end)
-  if n == nil then pcall(function() n = o.note end) end
-  return trim(tostring(n or ""))
-end
-
 -- nom -> plus petit numéro qui le porte
 local function numbersByName(poolName)
   local used, _, objs = readPool(poolName)
@@ -867,14 +932,26 @@ end
 local function renameBody(warnings, s, new)
   local q = '"' .. new .. '"'
   C("Label Page " .. s.page .. " " .. q)
+  setNote("Pages", "Page", s.page, new, warnings, "de la page")
   C("Label Sequence " .. s.seq .. " " .. q)
   setNotes(s.seq, s.extras, new, warnings)
-  if s.tc then C("Label Timecode " .. s.tc .. " " .. q) end
-  if s.macro then C("Label Macro " .. s.macro .. " " .. q) end
+  if s.tc then
+    C("Label Timecode " .. s.tc .. " " .. q)
+    setNote("Timecodes", "Timecode", s.tc, new, warnings, "du timecode")
+  end
+  if s.macro then
+    C("Label Macro " .. s.macro .. " " .. q)
+    setNote("Macros", "Macro", s.macro, new, warnings, "de la macro")
+  end
   local nCues = renameInCommands(cueCommandHolders(s.seq, s.extras), s.name, new, warnings)
   local nMacro = renameInCommands(macroLines(s.macro), s.name, new, warnings)
   if currentSongVar() == s.name then C("SetGlobalVariable currentSong " .. q) end
-  return { "Page " .. s.page .. ", séquence " .. s.seq .. " et notes : « " .. new .. " »",
+  -- tag : celui de l'ancien nom est renommé (les objets le gardent), sinon
+  -- créé ; puis posé sur tous les objets (songs faites avant la 0.7.1)
+  local oldTag = tagNo(s.name)
+  if oldTag and not tagNo(new) then C("Label Tag " .. oldTag .. " " .. q) end
+  tagSong(new, songObjects(s.page, s.seq, s.extras, s.tc, s.macro), warnings)
+  return { "Page " .. s.page .. ", séquence " .. s.seq .. ", notes et tag : « " .. new .. " »",
            s.tc and ("Timecode " .. s.tc .. " : « " .. new .. " »") or "Pas de timecode",
            s.macro and ("Macro " .. s.macro .. " : « " .. new .. " »") or "Pas de macro de rappel",
            nCues .. " commande(s) de cue et " .. nMacro .. " ligne(s) de macro modifiée(s)" }
@@ -890,6 +967,8 @@ local function deleteBody(warnings, s)
   if s.tc then C("Delete Timecode " .. s.tc .. " /NoConfirmation") end
   C("Delete Page " .. s.page .. " /NoConfirmation")
   C("Delete Sequence " .. seqRange(s.seq, s.extras) .. " /NoConfirmation")
+  local tag = tagNo(s.name)
+  if tag then C("Delete Tag " .. tag .. " /NoConfirmation") end
   local left = {}
   if exists("Pages", s.page) then left[#left + 1] = "Page " .. s.page end
   for n = s.seq, s.seq + s.extras do
@@ -897,6 +976,7 @@ local function deleteBody(warnings, s)
   end
   if s.tc and exists("Timecodes", s.tc) then left[#left + 1] = "Timecode " .. s.tc end
   if s.macro and exists("Macros", s.macro) then left[#left + 1] = "Macro " .. s.macro end
+  if tag and tagNo(s.name) then left[#left + 1] = 'Tag "' .. s.name .. '"' end
   if #left > 0 then
     warnings[#warnings + 1] = "Toujours dans le show : " .. table.concat(left, ", ")
   end
@@ -905,6 +985,7 @@ local function deleteBody(warnings, s)
              .. " supprimée" .. (s.extras > 0 and "s" or ""),
            s.tc and ("Timecode " .. s.tc .. " supprimé") or "Pas de timecode",
            s.macro and ("Macro " .. s.macro .. " supprimée") or "Pas de macro de rappel",
+           tag and ('Tag « ' .. s.name .. ' » supprimé') or "Pas de tag",
            "Un Oops remet toute la song" }
 end
 
@@ -913,15 +994,37 @@ local function deleteSong(s)
 end
 
 -- ---- Dupliquer : liens du timecode copié ----
-local function addrOf(h)
-  local ok, a = pcall(function() return ToAddr(h, false) end)
-  if not ok or type(a) ~= "string" then ok, a = pcall(function() return h:ToAddr() end) end
-  return (ok and type(a) == "string") and a or nil
-end
-
 local function classOf(o)
   local ok, c = pcall(function() return o:GetClass() end)
   return ok and tostring(c) or "?"
+end
+
+-- Identité d'un objet MA : même objet, même clé
+local function handleKey(h)
+  local ok, n = pcall(HandleToInt, h)
+  if ok and n ~= nil then return n end
+  return tostring(h)
+end
+
+-- Adresse « Sequence 101 Cue 3 » d'un objet. Seulement pour les objets qui en
+-- ont une : sur les objets internes d'un timecode (TrackGroup, pistes...),
+-- ToAddr écrit « Could not resolve object address » en rouge (console 0.7.0).
+-- Une seule demande par objet (cache vidé à chaque opération).
+local ADDR_CLASSES = { Sequence = true, Cue = true, Part = true, Page = true, Exec = true,
+                       Timecode = true, Macro = true }
+local addrCache = {}
+local function addrOf(h)
+  local key = handleKey(h)
+  local c = addrCache[key]
+  if c ~= nil then return c or nil end
+  local a
+  if ADDR_CLASSES[classOf(h)] then
+    local ok, r = pcall(function() return ToAddr(h, false) end)
+    if not ok then ok, r = pcall(function() return h:ToAddr() end) end
+    if ok and type(r) == "string" then a = r end
+  end
+  addrCache[key] = a or false
+  return a
 end
 
 -- Valeur d'une propriété quand c'est un lien vers un autre objet (handle)
@@ -952,13 +1055,6 @@ local function remapAddr(addr, map)
     if tonumber(n) == map.oldPage then changed = true; return pre .. map.newPage .. dot end
   end)
   return changed and out or nil
-end
-
--- Identité d'un objet MA : même objet, même clé
-local function handleKey(h)
-  local ok, n = pcall(HandleToInt, h)
-  if ok and n ~= nil then return n end
-  return tostring(h)
 end
 
 -- Ancien objet -> objet copié : séquences de la song avec leurs cues et
@@ -1008,18 +1104,27 @@ local function relink(o, pn, oldH, newH, newAddr, ways)
     if type(newH) ~= "userdata" then newH = nil end
   end
   local target = newH and handleKey(newH)
-  local targetAddr = newAddr or (newH and addrOf(newH))
-  local function isNew()
+  -- l'adresse n'est demandée que si le handle ne suffit pas (ToAddr peut
+  -- écrire une ligne rouge sur console)
+  local targetAddr = newAddr
+  local function getTargetAddr()
+    if targetAddr == nil and newH then targetAddr = addrOf(newH) or false end
+    return targetAddr or nil
+  end
+  local function isNew(byAddr)
     local h = linkValue(o, pn)
     if not h then return false end
     if target ~= nil and handleKey(h) == target then return true end
-    return targetAddr ~= nil and addrOf(h) == targetAddr
+    if not byAddr then return false end
+    local ta = getTargetAddr()
+    return ta ~= nil and addrOf(h) == ta
   end
   local function try(way)
     if way == "handle" and newH then
       pcall(function() o[pn] = newH end)
-    elseif way == "adresse" and targetAddr then
-      pcall(function() o:Set(pn, targetAddr) end)
+      return isNew(false)
+    elseif way == "adresse" and getTargetAddr() then
+      pcall(function() o:Set(pn, getTargetAddr()) end)
     elseif way == "adresse MA" and newH then
       local okA, root = pcall(function() return newH:Addr() end)
       if not (okA and type(root) == "string") then return false end
@@ -1027,7 +1132,7 @@ local function relink(o, pn, oldH, newH, newAddr, ways)
     else
       return false
     end
-    return isNew()
+    return isNew(true)
   end
   local w = ways[pn]
   if not w then w = { skip = {} }; ways[pn] = w end
@@ -1069,7 +1174,7 @@ local function dumpProps(o)
       local h = linkValue(o, pn)
       local val
       if h then
-        val = "@" .. (addrOf(h) or "?")
+        val = "@" .. (addrOf(h) or classOf(h))
       else
         local okV, v = pcall(function() return o:Get(pn) end)
         val = okV and tostring(v) or "?"
@@ -1087,11 +1192,24 @@ end
 local function retargetTimecode(tcNo, map)
   local tc = pool("Timecodes")[tcNo]
   local st = { objects = 0, links = 0, ok = 0, failed = 0, readonly = 0, left = 0 }
+  addrCache = {}
   local cmap = copyMap(map)
   local ways = {}
+  -- objets du timecode lui-même (TrackGroup, pistes, plages...) : leurs liens
+  -- entre eux ne visent jamais la song, on ne les touche pas
+  local inside = {}
+  local function mark(o)
+    inside[handleKey(o)] = true
+    local okK, kids = pcall(function() return o:Children() end)
+    for _, c in ipairs(okK and type(kids) == "table" and kids or {}) do mark(c) end
+  end
+  if tc then mark(tc) end
   local firstOfClass, classes, visits = {}, {}, 0
+  -- d'abord par identité seulement (marche sur console, 0.7.0) ; par adresse
+  -- seulement si l'identité ne trouve rien
+  local byAddr, firstPass = false, true
   local function walk(o, fix)
-    if fix then
+    if fix and firstPass then
       st.objects = st.objects + 1
       local cls = classOf(o)
       if not firstOfClass[cls] then firstOfClass[cls] = o; classes[#classes + 1] = cls end
@@ -1103,9 +1221,10 @@ local function retargetTimecode(tcNo, map)
       local okN, pn = pcall(function() return o:PropertyName(i) end)
       local h = okN and type(pn) == "string" and pn ~= "" and linkValue(o, pn)
       local newH, addr, newAddr
+      if h and inside[handleKey(h)] then h = nil end
       if h then
         newH = cmap[handleKey(h)]
-        if not newH then
+        if not newH and byAddr then
           addr = addrOf(h)
           newAddr = addr and remapAddr(addr, map)
         end
@@ -1138,6 +1257,11 @@ local function retargetTimecode(tcNo, map)
   end
   if tc then
     walk(tc, true)
+    firstPass = false
+    if st.links == 0 then
+      byAddr = true
+      walk(tc, true)
+    end
     walk(tc, false)
   end
   local used = {}
@@ -1221,6 +1345,7 @@ local function duplicateBody(warnings, s, d)
   end
   C("Page " .. d.page)
   C('Label Page ' .. d.page .. ' "' .. d.name .. '"')
+  setNote("Pages", "Page", d.page, d.name, warnings, "de la page")
   assignSongExecs(d.seq, k)
   local nOther = relinkOtherExecs(map)
   done[#done + 1] = "Page " .. d.page .. ", executors " .. execText(k)
@@ -1231,6 +1356,7 @@ local function duplicateBody(warnings, s, d)
     C("Copy Timecode " .. s.tc .. " At " .. d.tcNo .. " /NoConfirmation")
     if exists("Timecodes", d.tcNo) then
       C('Label Timecode ' .. d.tcNo .. ' "' .. d.name .. '"')
+      setNote("Timecodes", "Timecode", d.tcNo, d.name, warnings, "du timecode")
       local st = retargetTimecode(d.tcNo, map)
       done[#done + 1] = "Timecode " .. d.tcNo .. " : " .. st.ok .. " lien(s) rebranché(s)"
       if st.failed > 0 then
@@ -1254,12 +1380,23 @@ local function duplicateBody(warnings, s, d)
     C("Copy Macro " .. s.macro .. " At " .. d.macro .. " /NoConfirmation")
     if exists("Macros", d.macro) then
       C('Label Macro ' .. d.macro .. ' "' .. d.name .. '"')
+      setNote("Macros", "Macro", d.macro, d.name, warnings, "de la macro")
       local nLines = renameInCommands(macroLines(d.macro), s.name, d.name, warnings)
       done[#done + 1] = "Macro " .. d.macro .. " (" .. nLines .. " ligne(s) avec le nouveau nom)"
     else
       warnings[#warnings + 1] = "Macro " .. s.macro .. " non copiée"
     end
   end
+
+  -- 5. Tag : la copie perd celui de l'origine (s'il a suivi la copie) et prend le sien
+  local objs = songObjects(d.page, d.seq, k,
+                           (s.tc and exists("Timecodes", d.tcNo)) and d.tcNo or nil,
+                           (s.macro and exists("Macros", d.macro)) and d.macro or nil)
+  if tagNo(s.name) then
+    for _, o in ipairs(objs) do Cq('Assign Off Tag "' .. s.name .. '" At ' .. o) end
+  end
+  tagSong(d.name, objs, warnings)
+  done[#done + 1] = "Tag « " .. d.name .. " » sur la copie"
   return done
 end
 
@@ -1544,7 +1681,7 @@ local function recapLines(v)
   else
     t[#t + 1] = "Extras : aucun"
   end
-  t[#t + 1] = "Notes sur " .. (n + 1) .. " séquence" .. (n > 0 and "s" or "")
+  t[#t + 1] = "Note et tag « " .. name .. " » partout"
   t[#t + 1] = "Cues 0.5 Mise, 0.6 Select TC, 0.7 Go TC"
   t[#t + 1] = "Cues 1 à " .. q(v.cues) .. ", " .. (c + 1) .. " Black Out, " .. (c + 2) .. " Off TC"
   t[#t + 1] = "Timecode " .. (v.tcOn and (q(v.tcNo) .. " « " .. name .. " »") or ": non")
@@ -2334,7 +2471,7 @@ local function renameLines(w, s, new)
   return table.concat({
     "Page " .. s.page .. " -> « " .. nn .. " »",
     "Séquence " .. s.seq .. " -> « " .. nn .. " »",
-    "Notes : " .. seqText(s.seq, s.extras):lower(),
+    "Note et tag « " .. nn .. " » partout",
     s.tc and ("Timecode " .. s.tc .. " -> « " .. nn .. " »") or "Pas de timecode à ce nom",
     s.macro and ("Macro " .. s.macro .. " -> « " .. nn .. " »") or "Pas de macro à ce nom",
     c.cues .. " commande(s) de cue avec ce nom",
@@ -2352,7 +2489,7 @@ local function dupLines(s, d)
     "Exec " .. execText(k, ", ") .. " sur la page " .. q(d.page),
     s.tc and ("Timecode " .. s.tc .. " -> " .. q(d.tcNo) .. ", liens rebranchés") or "Pas de timecode à copier",
     s.macro and ("Macro " .. s.macro .. " -> " .. q(d.macro)) or "Pas de macro à copier",
-    "Nom « " .. ((d.name ~= "") and d.name or "?") .. " » partout",
+    "Nom, note et tag « " .. ((d.name ~= "") and d.name or "?") .. " » partout",
     "Un Oops annule toute la copie",
   }
   return table.concat(t, "\n")
@@ -2365,6 +2502,7 @@ local function deleteLines(s)
     (s.extras > 0) and ("Extras " .. (s.seq + 1) .. " à " .. (s.seq + s.extras)) or "Pas d'extras",
     s.tc and ("Timecode " .. s.tc) or "Pas de timecode à ce nom",
     s.macro and ("Macro " .. s.macro) or "Pas de macro à ce nom",
+    tagNo(s.name) and ("Tag « " .. s.name .. " »") or "Pas de tag à ce nom",
     "Un Oops remet toute la song",
   }, "\n")
 end

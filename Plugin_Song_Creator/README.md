@@ -1,4 +1,4 @@
-# Plugin Song Creator v0.7.0 (grandMA3 2.3.2.0)
+# Plugin Song Creator v0.7.1 (grandMA3 2.3.2.0)
 
 Plugin grandMA3 qui remplace la macro « FULL SONG CREATOR » : une fenêtre de setup,
 puis la création complète d'une song (page, séquences, cues, timecode, executors,
@@ -69,11 +69,16 @@ pour revenir à l'apparence par défaut.
 - Timecode créé et nommé ; commandes `Select Timecode "Nom"`, `Go+ Timecode "Nom"`,
   `Off Timecode "Nom"` posées sur les cues TC.
 - Macro de rappel (7 lignes), `$currentSong` conservé tel quel.
+- Depuis la 0.7.1 : **note au nom de la song** sur la page, les séquences, le timecode et la macro, et
+  **un tag au nom de la song** (pool Tags) posé sur ces mêmes objets, pour filtrer et pour d'autres
+  plugins. Commandes : `Store Tag "Nom"`, `Assign Tag "Nom" At Page 3`, `... At Sequence 101 Thru 105`...
 
 ## Renommer, Dupliquer, Supprimer (0.7)
 Une song, c'est **une page et une séquence qui portent le même nom** (ce que font le plugin et
-l'ancienne macro). Ses extras sont les séquences qui suivent la main avec ce nom en note, son
-timecode et sa macro de rappel sont ceux qui portent ce nom.
+l'ancienne macro). Ses extras sont les séquences qui suivent directement la main (numéros qui se
+suivent, 10 au maximum) avec ce nom en **note** ; leur propre nom ne compte pas. Son timecode et sa
+macro de rappel sont ceux qui portent ce nom. Un extra séparé de la main par un trou, ou dont la
+note a été effacée, n'est pas vu comme faisant partie de la song.
 
 Dans ces trois modes, la ligne **Song ▾** ouvre la liste des songs du show (même liste que les
 pools, dans la fenêtre). En dessous : la séquence main, les extras, le timecode et la macro trouvés.
@@ -90,7 +95,9 @@ pools, dans la fenêtre). En dessous : la séquence main, les extras, le timecod
   song d'origine (piste, event vers une cue, executor) est ensuite rebranché sur la copie. Les
   pistes qui visent d'autres séquences restent telles quelles. Si un emplacement est occupé,
   deuxième appui « Écraser et dupliquer ».
-- **Supprimer** : le récap liste tout ce qui part (page, séquences, timecode, macro). Bouton gris
+- **Tag (0.7.1)** : Renommer renomme le tag de la song (ou le crée pour une song plus ancienne) ;
+  Dupliquer retire le tag d'origine de la copie et lui pose le sien ; Supprimer supprime aussi le tag.
+- **Supprimer** : le récap liste tout ce qui part (page, séquences, timecode, macro, tag). Bouton gris
   à texte rouge, deuxième appui « Confirmer la suppression ».
 
 ## Annuler (Oops)
@@ -111,7 +118,11 @@ Sur onPC, si les raccourcis clavier sont actifs, les touches tapées dans la fen
 raccourcis. Coupe-les avec F10 (ou ShCuts) le temps de remplir le setup.
 
 ## À vérifier sur console
-- v0.7.0 : les trois nouveaux modes. Le System Monitor note pour le timecode copié :
+- v0.7.0 / 0.7.1 : Renommer, Dupliquer (timecode compris : les pistes déclenchent bien les nouvelles
+  séquences) et Supprimer validés sur console par Jo (12/10). La 0.7.1 ne demande plus l'adresse des
+  objets internes du timecode (lignes rouges « Could not resolve object address » en 0.7.0) et ferme
+  la fenêtre sans vider l'écran 1. Les tags sont nouveaux en 0.7.1 : si MA refuse une commande de
+  tag, elle est listée en avertissement. Le System Monitor note pour le timecode copié :
   `TC n : x objets lus, y liens vers la song d'origine, z rebranches ... (Target par handle ...)`.
   Si des liens n'ont pas pu être rebranchés, ils sont listés avec la structure du timecode
   (`TC classe ...`) : une photo de ces lignes suffit pour corriger.
