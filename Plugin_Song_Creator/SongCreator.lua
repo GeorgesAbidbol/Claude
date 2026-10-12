@@ -10,7 +10,7 @@ local componentName = select(2, ...)
 local signalTable   = select(3, ...)
 local myHandle      = select(4, ...)
 
-local VERSION = "0.6.2"
+local VERSION = "0.6.3"
 
 -- ---------------------------------------------------------------------------
 --  Réglages fixes (ceux de la macro d'origine)
@@ -674,6 +674,7 @@ local UI = {
   fontSection = "Regular20", fontSmall = "Regular14",
 }
 local PANEL = 10   -- marge autour des panneaux
+local RECAP_ROWS = 9   -- cases du récap « Ce qui sera créé »
 
 -- marges autour d'un champ ou d'un bouton : c'est ce qui sépare les cases
 local function itemMargin() return { left = 6, right = 0, top = 5, bottom = 5 } end
@@ -964,7 +965,10 @@ local function pickWithScroll(poolName, current, block)
         local r, g, bl, a = appearanceColor(objs[n])
         if r then paint[#paint + 1] = { b = b, r = r, g = g, bl = bl, a = a, current = (n == current) } end
       else
-        b.Text = n .. "  - libre -"
+        -- libre : case noire (fond transparent sur le noir de la liste), comme
+        -- les cases vides d'un pool ; occupé : case grise ou couleur de l'apparence
+        b.Text = n .. (fits and "  - libre -" or "  - pas la place -")
+        quiet(b, "BackColor", COL.transparent)
         quiet(b, "TextColor", "Global.LabelText")
       end
       -- quiet : un refus ne doit pas écrire une ligne par case dans le System Monitor
@@ -983,12 +987,11 @@ local function pickWithScroll(poolName, current, block)
       if n == current then quiet(b, "TextColor", "Global.Selected") end
     end
 
-    local txt = nObj .. " objets dans le pool, numéros 1 à " .. (nos[#nos] or 0)
-             .. (current and (", choix actuel : " .. current) or "")
-             .. ". Fais défiler avec la barre à droite."
+    local txt = "Noir : libre.   Gris ou couleur : occupé."
     if block > 1 then
-      txt = txt .. "  Grisé : pas la place pour la séquence et ses " .. (block - 1) .. " extras."
+      txt = txt .. "   « pas la place » : la séquence et ses " .. (block - 1) .. " extras ne tiennent pas."
     end
+    txt = txt .. "   " .. nObj .. " objets" .. (current and (", choix actuel : " .. current) or "") .. "."
     label(base, cell(0, 2), txt, { Font = UI.fontSmall, TextColor = "Global.LabelText",
                                    Padding = pad(14, 8, 0, 0) })
   end)
@@ -1105,6 +1108,28 @@ local function slotStatus(poolName, no, block)
   end
   if count == 1 then return "occupé : " .. first, "Global.WarningText" end
   return count .. " sur " .. block .. " occupés", "Global.WarningText"
+end
+
+-- Récap « Ce qui sera créé » : une ligne par case ; s'il y a plus de lignes
+-- que de cases, la dernière case reçoit le reste.
+local function setRecap(w, text)
+  local lines = {}
+  for l in (text .. "\n"):gmatch("(.-)\n") do lines[#lines + 1] = l end
+  if #lines > RECAP_ROWS then
+    local rest = {}
+    for i = RECAP_ROWS, #lines do rest[#rest + 1] = lines[i] end
+    lines[RECAP_ROWS] = table.concat(rest, "  ")
+  end
+  for i = 1, RECAP_ROWS do
+    local row, l = w.recapRows[i], lines[i]
+    if l and l ~= "" then
+      row.Text = l
+      quiet(row, "BackColor", COL.back)
+    else
+      row.Text = ""
+      quiet(row, "BackColor", COL.transparent)
+    end
+  end
 end
 
 local function setAlert(w, text, color)
@@ -1243,8 +1268,14 @@ local function buildSetupWindow(v)
   fixRow(rc, 3, UI.gap)
   fixRow(rc, 4, 110)
   section(rc, cell(0, 0), "Ce qui sera créé")
-  w.recap = label(rc, cell(0, 1), "", { TextalignmentV = "Top", BackColor = COL.back,
-                                        Padding = pad(14, 10, 12, 10) })
+  -- une case par ligne, séparées comme les champs de gauche
+  local rg = grid(rc, cell(0, 1), 1, RECAP_ROWS)
+  w.recapRows = {}
+  for i = 1, RECAP_ROWS do
+    rg[1][i].SizePolicy = "Stretch"
+    w.recapRows[i] = label(rg, cell(0, i - 1), "", { BackColor = COL.back, TextalignmentV = "Center",
+                                                     Margin = pad(0, 0, 3, 3), Padding = pad(14, 8, 0, 0) })
+  end
   w.alert = label(rc, cell(0, 3), "", { TextalignmentV = "Top", Padding = pad(6, 6, 4, 4) })
 
   -- Barre de boutons : Créer en couleur « Please », comme le Replace de V15
@@ -1288,7 +1319,7 @@ local function runSetupWindow(w)
     local input = readFields(w)
     local err, busy = validate(input)
     w.maName.Text = (input.name ~= "") and ("Nom dans MA : " .. input.name) or ""
-    w.recap.Text = recapLines(input)
+    setRecap(w, recapLines(input))
     -- état de chaque emplacement à droite du numéro, numéro en orange si occupé
     for _, s in ipairs(SLOTS) do
       local txt, color
@@ -1382,7 +1413,7 @@ local function runSetupWindow(w)
         elseif #res > 0 then
           setAlert(w, 'Song « ' .. input.name .. ' » créée, avec avertissements (ci-dessus).',
                    "Global.WarningText")
-          w.recap.Text = "- " .. table.concat(res, "\n- ")
+          setRecap(w, "- " .. table.concat(res, "\n- "))
         else
           setAlert(w, 'Song « ' .. input.name .. ' » créée.', "Global.SuccessText")
         end

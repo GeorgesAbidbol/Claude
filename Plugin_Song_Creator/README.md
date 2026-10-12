@@ -1,4 +1,4 @@
-# Plugin Song Creator v0.6.2 (grandMA3 2.3.2.0)
+# Plugin Song Creator v0.6.3 (grandMA3 2.3.2.0)
 
 Plugin grandMA3 qui remplace la macro « FULL SONG CREATOR » : une fenêtre de setup,
 puis la création complète d'une song (page, séquences, cues, timecode, executors,
@@ -33,13 +33,14 @@ plugin GUI REPLACE V15 de Jo : cadre de dialogue MA, marges entre les cases, lib
     le numéro, puis son état (« libre », ou « occupé : « Intro » » en orange), puis la flèche ▾.
     L'état ou la flèche ouvrent la liste « Select Page », « Select Sequence »... : tous les
     numéros du pool comme dans la fenêtre du pool (objets existants et cases « - libre - »),
-    jusqu'à 30 numéros après le dernier objet, avec une **barre de défilement** à droite. Les
-    objets prennent la couleur de leur apparence (pas l'image). On touche une case pour la
-    choisir ; la croix ou Échap ferment sans rien changer. Pour la séquence, les numéros libres
-    qui n'ont pas la place pour la main et ses extras sont grisés, et l'état couvre tout le bloc ;
+    jusqu'à 30 numéros après le dernier objet, avec une **barre de défilement** à droite.
+    **Noir : libre. Gris : occupé** (ou la couleur de son apparence, pas l'image). On touche une
+    case pour la choisir ; la croix ou Échap ferment sans rien changer. Pour la séquence, un
+    numéro libre marqué « pas la place » ne peut pas recevoir la main et ses extras (l'objet
+    suivant est trop près) : il n'est pas sélectionnable. L'état couvre tout le bloc ;
   - **Réglages** : BPM, Extras (0 à 10), Cues de song, Créer le timecode (Oui / Non) ;
   - rappel des réglages fixes : Exec main 216, extras 121 à 130, pages communes, Speed Master 3.1.
-- **À droite, « Ce qui sera créé »** : le récap en direct, puis l'alerte en couleur (rouge :
+- **À droite, « Ce qui sera créé »** : le récap en direct, une case par ligne, puis l'alerte en couleur (rouge :
   erreur, orange : déjà occupé ou apparence absente, vert : prêt).
 - **En bas** :
   - **Créer la song** (dans la couleur de mise en avant de MA) : si quelque chose est déjà occupé,
@@ -83,7 +84,8 @@ Sur onPC, si les raccourcis clavier sont actifs, les touches tapées dans la fen
 raccourcis. Coupe-les avec F10 (ou ShCuts) le temps de remplir le setup.
 
 ## À vérifier sur console
-- **À tester d'abord sur onPC, show sauvegardé** : la nouvelle liste des pools (v0.6.2). Elle reprend
+- La liste des pools v0.6.2 a marché sur onPC (défilement, pas de plantage). Les couleurs d'apparence
+  restent à voir sur des objets qui ont une apparence. La liste reprend
   la recette de défilement d'un plugin publié (ScrollBox + ScrollBarV), pas la liste de la v0.6.0 qui
   plantait. La liste s'affiche d'abord sans couleurs, puis les couleurs d'apparence sont posées :
   si MA plante juste après l'apparition de la liste, ce sont les couleurs. Le System Monitor note

@@ -40,6 +40,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.6.0 | test console de la 0.5.0 : « pas mal et fonctionnel ». Listes de pools refaites : fenêtre « Select ... » (`Popup` + `ScrollableItemList` en `PopupItemButtonExt`) avec l'apparence de chaque objet, barre de défilement (`ScrollBarV`) et filtre ; tous les objets du pool (400 séquences et plus), plus des numéros libres triés au milieu ; liste simple `PopupInput` en secours. Titre de la liste simple corrigé (« Select Select Sequence »). Logo banane de Jo dans la barre de titre (`AppearancePreview`) si le show a une apparence dont le nom contient « banane » |
 | 0.6.1 | test console de la 0.6.0 : affichage cassé, liste « Select ... » qui fait planter MA dès l'ouverture, logo banane absent. Jo : « laisse tomber » la banane, retour à la fenêtre d'avant (il a choisi la v0.5.0). Donc fenêtre v0.5.0 et liste native `PopupInput` (sans apparences) ; seul ajout gardé : titre des listes « Page », « Sequence »... pour que MA affiche « Select Sequence » |
 | 0.6.2 | test console de la 0.6.1 : la liste native `PopupInput` ne défile pas et ne propose que les objets et 12 numéros libres, impossible d'aller plus loin (séquences, macros, timecodes). Nouvelle liste « Select ... » : `BaseInput` + `DialogFrame` + `ScrollBox` + `ScrollBarV` (recette de Tags UI Helper de BakaCowpoke, CC0), une case `Button` par numéro (tous les numéros du pool, 30 après le dernier objet, au plus 1000 cases sauf objets), libres trop courts pour séquence + extras grisés, couleur de l'apparence posée après l'affichage via des couleurs ajoutées au thème (Global.SongCreator_rrggbbaa, retirées à la fin). `PopupInput` gardé en secours |
+| 0.6.3 | test onPC de la 0.6.2 : la liste défile et ne plante pas. Jo : « libre c'est noir, pas libre c'est gris » dans les quatre listes ; cases libres en fond transparent (noir de la liste), occupées en gris ou couleur d'apparence ; numéros libres trop courts pour séquence + extras marqués « pas la place » (Jo ne comprenait pas pourquoi ils étaient grisés). Légende en bas de la liste. « Ce qui sera créé » : une case par ligne (9 cases étirées) au lieu d'un seul bloc de texte |
 
 ## Leçons apprises
 
@@ -112,6 +113,9 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
   (`[2][2].SizePolicy = "Content"`), `ScrollBox` nommée, `ScrollBarV` avec `ScrollTarget = "../nom"`
   (chemin texte, pas un handle comme en 0.6.0), enfants posés en `X`/`Y` avec `W`/`H`. Couleur sur
   mesure : `Root().ColorTheme.ColorGroups.Global:Acquire()`, `Set("name")`, `Set("rgba", "rrggbbaa")`.
+- **Test onPC de la v0.6.2 (12/10)** : la recette `ScrollBox` + `ScrollBarV` marche (liste de 86 cases,
+  défilement, pas de plantage), le bouton désactivé (`Enabled = "No"`) s'affiche presque noir. Couleurs
+  d'apparence pas encore vues (séquences du show de test sans apparence ?).
 - **Couleur d'une apparence** : propriété `Color` (« 1.0,1.0,1.0,1.0 », 0..1, vu dans l'export xml de Jo).
 - **Test console de la v0.6.0 (12/10)** : la liste `Popup` + `ScrollableItemList` fait **planter instantanément**
   à l'ouverture (flèches des pools) ; le logo banane (`AppearancePreview` dans la barre de titre) ne s'affiche
@@ -136,8 +140,8 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 ## Reste à faire
 
-- Tester sur onPC puis console la v0.6.2 : liste des pools avec défilement et couleurs d'apparence.
-  Si elle plante, regarder si la liste est apparue avant (couleurs) ou non (ScrollBox / cases).
+- Tester la v0.6.3 : cases noires / grises, récap en cases, couleurs d'apparence sur des objets qui en ont
+  (System Monitor : « cases en couleur d'apparence »).
 - Pistes si la v0.6.2 marche : ouvrir la liste sur le numéro actuel (`ScrollDo`), filtre par nom.
 - Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
