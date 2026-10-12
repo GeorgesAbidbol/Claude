@@ -116,6 +116,10 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 - **Test onPC de la v0.6.2 (12/10)** : la recette `ScrollBox` + `ScrollBarV` marche (liste de 86 cases,
   défilement, pas de plantage), le bouton désactivé (`Enabled = "No"`) s'affiche presque noir. Couleurs
   d'apparence pas encore vues (séquences du show de test sans apparence ?).
+- **Baguette de MULE creator (Andreas Glad, montré par Jo le 12/10)** : c'est l'icône intégrée de MA
+  `wizard`, passée à `MessageBox` (`icon = 'wizard'`), pas une image du show. Les icônes de barre de titre
+  viennent de la liste de textures de MA (`FindTexture(nom)` existe). Une image du show (la banane) n'y est
+  pas a priori : à vérifier sans risque avec `FindTexture` avant de la mettre en icône.
 - **Couleur d'une apparence** : propriété `Color` (« 1.0,1.0,1.0,1.0 », 0..1, vu dans l'export xml de Jo).
 - **Test console de la v0.6.0 (12/10)** : la liste `Popup` + `ScrollableItemList` fait **planter instantanément**
   à l'ouverture (flèches des pools) ; le logo banane (`AppearancePreview` dans la barre de titre) ne s'affiche
@@ -142,6 +146,8 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 - Tester la v0.6.3 : cases noires / grises, récap en cases, couleurs d'apparence sur des objets qui en ont
   (System Monitor : « cases en couleur d'apparence »).
+- Banane en icône : dans la prochaine version, demander à MA (`FindTexture`) s'il connaît l'image
+  banane comme texture et l'écrire dans le System Monitor ; si oui, la mettre à la place de l'icône plugin.
 - Pistes si la v0.6.2 marche : ouvrir la liste sur le numéro actuel (`ScrollDo`), filtre par nom.
 - Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
