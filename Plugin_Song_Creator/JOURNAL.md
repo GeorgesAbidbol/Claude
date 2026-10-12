@@ -162,7 +162,7 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 - v0.6.5 validée par Jo sur onPC (12/10) : « tout marche ». Couleurs d'apparence encore à voir sur des
   objets qui en ont.
-- **v0.7.0 à tester sur console** : les trois modes. Points incertains sans console : nom de la
+- **v0.7.0** : Renommer validé sur console par Jo (12/10, « le rename marche »). Dupliquer et Supprimer à tester. Points incertains sans console : nom de la
   propriété des liens du timecode et façon de les écrire (le plugin essaie handle, adresse, adresse MA
   et écrit ce qui a marché), `Copy Page` (executors gardés en référence aux séquences d'origine,
   supposé), `Assign` sur un executor déjà occupé (supposé sans confirmation), propriété `Note` des
