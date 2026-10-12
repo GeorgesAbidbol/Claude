@@ -1,4 +1,4 @@
-# Plugin Song Creator v0.6.0 (grandMA3 2.3.2.0)
+# Plugin Song Creator v0.6.1 (grandMA3 2.3.2.0)
 
 Plugin grandMA3 qui remplace la macro « FULL SONG CREATOR » : une fenêtre de setup,
 puis la création complète d'une song (page, séquences, cues, timecode, executors,
@@ -24,21 +24,17 @@ Disposition de la maquette v0.4 (modèle « Search and Modify »), avec les rece
 plugin GUI REPLACE V15 de Jo : cadre de dialogue MA, marges entre les cases, libellés sans fond.
 - Une seule fenêtre, toujours sur **l'écran 1**, taille de départ 1300 x 760 (au plus 95 % de l'écran).
 - **Barre de titre** : on la fait glisser pour déplacer la fenêtre ; version à droite ; **croix**
-  pour fermer (ou Échap). **Logo** : si le show a une apparence (ou une image) dont le nom contient
-  « banane », elle s'affiche à gauche du titre. Sinon, l'icône plugin de MA. **Coin de redimensionnement** en bas à droite.
+  pour fermer (ou Échap). **Coin de redimensionnement** en bas à droite.
 - **À gauche, « Mode »** : Créer (en jaune). Renommer, Dupliquer et Supprimer sont grisés,
   ils viendront plus tard.
 - **Au centre** :
   - **Song** : le nom, avec en dessous le nom tel qu'il sera écrit dans MA (`Nuit_Blanche`) ;
   - **Emplacements** : une ligne par objet (Page, Séquence main, Macro de rappel, Timecode) avec
     le numéro, puis son état (« libre », ou « occupé : « Intro » » en orange), puis la flèche ▾.
-    L'état ou la flèche ouvrent la liste « Select ... » du pool : tous les objets existants avec
-    leur apparence (couleur, image), plus des numéros libres (30 dans les trous du pool, 5 après le
-    dernier objet), triés par numéro. Barre de défilement à droite, filtre en haut (on tape un bout
-    du nom ou du numéro, Entrée prend le premier). Pour la séquence, seuls les numéros qui ont la
-    place pour la main et toutes les extras sont proposés libres, et l'état couvre tout le bloc.
-    Si cette liste ne peut pas s'ouvrir sur une version de MA, le plugin ouvre la liste simple
-    (sans apparences) et l'écrit dans le System Monitor ;
+    L'état ou la flèche ouvrent la fenêtre de sélection native de MA (« Select Page »,
+    « Select Sequence »..., filtre clavier) avec les objets existants et des numéros libres.
+    Cette liste native n'affiche pas les apparences. Pour la séquence, l'état couvre la main et
+    toutes les extras ;
   - **Réglages** : BPM, Extras (0 à 10), Cues de song, Créer le timecode (Oui / Non) ;
   - rappel des réglages fixes : Exec main 216, extras 121 à 130, pages communes, Speed Master 3.1.
 - **À droite, « Ce qui sera créé »** : le récap en direct, puis l'alerte en couleur (rouge :
@@ -85,6 +81,8 @@ Sur onPC, si les raccourcis clavier sont actifs, les touches tapées dans la fen
 raccourcis. Coupe-les avec F10 (ou ShCuts) le temps de remplir le setup.
 
 ## À vérifier sur console
-- La liste « Select ... » v0.6 : apparences, barre de défilement, filtre, choix d'un élément ; le logo. Une propriété
-  refusée par MA est ignorée et notée « propriete ignoree » dans le System Monitor.
+- La fenêtre est celle de la v0.5.0 (la liste avec apparences et le logo de la v0.6.0 sont retirés,
+  la liste faisait planter MA). Le titre des listes doit maintenant être « Select Sequence » et non
+  plus « Select Select Sequence ». Une propriété refusée par MA est ignorée et notée
+  « propriete ignoree » dans le System Monitor.
 - Le programmer doit être vide : les `Store Cue` enregistrent son contenu.

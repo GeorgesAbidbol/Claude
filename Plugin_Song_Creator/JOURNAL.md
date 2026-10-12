@@ -38,6 +38,7 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
 | 0.4.1 | retours console de la 0.4.0 : fenêtre de départ agrandie (1400 x 600), cases des emplacements plus larges (les numéros étaient masqués), icônes des boutons placées à gauche du texte ou retirées si MA ne sait pas les décaler, plus d'icône sur le bouton Oui / Non, lignes du récap raccourcies |
 | 0.5.0 | fenêtre refaite avec les recettes de GUI REPLACE V15 de Jo (validé sur console) : `DialogFrame` pour le cadre et le fond, marges autour de chaque case, libellés sans fond à gauche des champs, titres de section, une ligne par emplacement avec son état (libre / occupé : « nom ») qui ouvre la liste, bouton Créer dans la couleur « Please » de MA, version à droite de la barre de titre, fenêtre 1300 x 760 (au plus 95 % de l'écran) |
 | 0.6.0 | test console de la 0.5.0 : « pas mal et fonctionnel ». Listes de pools refaites : fenêtre « Select ... » (`Popup` + `ScrollableItemList` en `PopupItemButtonExt`) avec l'apparence de chaque objet, barre de défilement (`ScrollBarV`) et filtre ; tous les objets du pool (400 séquences et plus), plus des numéros libres triés au milieu ; liste simple `PopupInput` en secours. Titre de la liste simple corrigé (« Select Select Sequence »). Logo banane de Jo dans la barre de titre (`AppearancePreview`) si le show a une apparence dont le nom contient « banane » |
+| 0.6.1 | test console de la 0.6.0 : affichage cassé, liste « Select ... » qui fait planter MA dès l'ouverture, logo banane absent. Jo : « laisse tomber » la banane, retour à la fenêtre d'avant (il a choisi la v0.5.0). Donc fenêtre v0.5.0 et liste native `PopupInput` (sans apparences) ; seul ajout gardé : titre des listes « Page », « Sequence »... pour que MA affiche « Select Sequence » |
 
 ## Leçons apprises
 
@@ -104,6 +105,11 @@ Cible : grandMA3 **2.3.2.0**, console + onPC en session réseau.
   `Icon` ; utiliser un `AppearancePreview` avec `Appearance = GetObject('Image 3.1')` (ou une apparence),
   `BackColor = 'Global.Transparent'`, `Interactive = 'No'`. Jo a fait l'apparence
   « [[LOGO Banane Vectorisé Blanc_png]] » (image `CUSTOM/LOGO Banane Vectorisé Blanc.png`).
+- **Test console de la v0.6.0 (12/10)** : la liste `Popup` + `ScrollableItemList` fait **planter instantanément**
+  à l'ouverture (flèches des pools) ; le logo banane (`AppearancePreview` dans la barre de titre) ne s'affiche
+  pas et l'affichage est cassé. Jo : « laisse tomber » la banane, retour à la fenêtre d'avant et à la liste
+  `PopupInput` qui marchait. Ne plus ajouter ces éléments dans le plugin : à tester d'abord dans un plugin
+  de test séparé, sur onPC.
 
 ## Ressources
 
@@ -122,7 +128,10 @@ Ce qu'elle a appris tout de suite : `PopupInput` accepte `render_options = {left
 
 ## Reste à faire
 
-- Tester sur console la v0.6.0 : liste « Select ... » (apparences, défilement, filtre, choix) et logo.
+- Tester sur console la v0.6.1 (fenêtre v0.5.0, titre « Select Sequence »).
+- Demande de Jo (12/10) toujours ouverte : barre de défilement et apparences dans les listes de pools.
+  La liste native `PopupInput` n'affiche pas les apparences, la liste maison de la v0.6.0 a planté.
+  Ne pas la remettre dans le plugin : la tester d'abord dans un petit plugin séparé, sur onPC, avec l'accord de Jo.
 - Problèmes de code repérés par Jo (11/10), à reprendre ensemble.
 - Saisie de texte avec les raccourcis clavier actifs sur onPC.
 - Question de Jo (11/10) : le plugin apporte-t-il plus que la macro ? Piste : gérer les songs existantes
